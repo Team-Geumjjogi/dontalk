@@ -1,0 +1,11 @@
+# 데이터 가공 + 평가 (로컬에서도 사용)
+pandas
+pyyaml
+tqdm
+# 학습 (Colab에서 사용. Colab에는 torch가 이미 설치되어 있으므로 보통 아래만 추가)
+# transformers
+# peft
+# trl
+# bitsandbytes
+# accelerate
+# datasets

@@ -1,0 +1,2 @@
+# TODO(LLM 담당): 연습용(작은 모델)과 본 학습(7.8B) 설정을 분리해서 작성
+model_id: LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct

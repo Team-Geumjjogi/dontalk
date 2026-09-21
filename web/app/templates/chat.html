@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>돈톡 DonTalk</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 24px auto; padding: 0 12px; }
+    #log { border: 1px solid #ddd; border-radius: 8px; height: 380px; overflow-y: auto; padding: 12px; }
+    .me { text-align: right; color: #1a56db; margin: 8px 0; }
+    .ai { margin: 8px 0; }
+    .meta { font-size: 12px; color: #888; }
+    form { display: flex; gap: 8px; margin-top: 12px; }
+    input { flex: 1; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h2>돈톡 💬</h2>
+  <p class="meta">돈에 대해 편하게 이야기하고, 금융 고민을 톡톡 풀어주는 AI</p>
+  <div id="log"></div>
+  <form id="f">
+    <input id="q" placeholder="궁금한 금융 문의를 입력하세요" autocomplete="off">
+    <button>전송</button>
+  </form>
+  <script>
+    // TODO(웹 담당): 디자인 개선, 근거(sources) 표시, 상담사 연결 버튼(handoff_needed일 때)
+    const log = document.getElementById("log");
+    const add = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; };
+    document.getElementById("f").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = document.getElementById("q"); const message = q.value.trim(); if (!message) return;
+      add("me", message); q.value = "";
+      const res = await fetch("/api/chat", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({message}) });
+      const data = await res.json();
+      add("ai", data.answer);
+      if (data.category) add("meta", `분야: ${data.category} / 주제: ${data.topic} / 확신도: ${data.confidence}`);
+      if (data.handoff_needed) add("meta", "⚠ 상담사 연결이 필요해 보입니다. (TODO: 연결 버튼)");
+    });
+  </script>
+</body>
+</html>

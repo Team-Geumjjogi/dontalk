@@ -1,0 +1,27 @@
+# 데이터 가공 설정. 회의에서 결론 나지 않은 항목은 여기서 스위치로 바꿔가며 실험합니다.
+seed: 42
+
+# 분할 단위는 "상담(source_id)". 같은 상담에서 나온 QA가 train/test로 갈라지면 누수가 생깁니다.
+split:
+  train: 0.8
+  valid: 0.1
+  test: 0.1
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+
+# ---- RAG 문서 구성 (회의안: rag[text], rag[meta]) ----
+rag:
+  # page_content 에 넣을 필드 (순서대로). 값은 parse_aihub.py 가 만드는 flat 컬럼명.
+  text_fields: [instruction, question, answer, follow_up_question, output]
+  # metadata 로 넣을 필드. 회의 논점: 4개를 그대로 쓸지 / 2개로 묶을지 → 여기서 조절
+  meta_fields: [category, consulting_topic, qa_topic, consulting_purpose]
+  # 항상 붙는 보조 metadata
+  meta_extra: [institution, source_id, qa_id]
+
+# ---- LLM 파인튜닝 데이터 구성 (회의안: inst / output) ----
+sft:
+  # qa       : input = 고객질문                → output = 상담사 답변(answer)
+  # followup : input = 고객질문 + 꼬리질문      → output = 최종 답안(output)
+  mode: followup
