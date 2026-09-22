@@ -1,0 +1,19 @@
+[project]
+name = "dontalk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Lee,Chaewon", email = "dlcodnjs267@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=3.0.6",
+]
+
+[project.scripts]
+dontalk = "dontalk:main"
+
+[build-system]
+requires = ["uv_build>=0.12.9,<0.13.0"]
+build-backend = "uv_build"
