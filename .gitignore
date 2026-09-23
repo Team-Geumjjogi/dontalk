@@ -44,8 +44,3 @@ wandb/
 .DS_Store
 .vscode/
 .idea/
-
-# ===== uv (레포는 venv+requirements.txt 방식, 루트 uv 스캐폴드는 사용 안 함) =====
-pyproject.toml
-uv.lock
-.python-version
