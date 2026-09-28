@@ -2,9 +2,8 @@
 
 흐름: 고객이 메시지를 보내면 -> (필요시 Customer/Consult 새로 생성) -> 메시지 저장
       -> AI 서버 호출 -> AI 응답 메시지 저장 -> 응답 반환
-만족/불만족 버튼을 누르면 -> 그 상담(consult)에 결과를 기록하고 종료(또는 상담사 이관 표시).
-
-TODO(웹 담당, 4단계): "상담사 연결하기" 버튼 클릭 시 이름 입력 폼 -> 대기큐 등록.
+만족/불만족 버튼을 누르면 -> 그 상담(consult)에 결과를 기록하고 종료(또는 상담사 이관 필요 표시).
+"상담사 연결하기" -> 이름 입력 -> /api/handoff -> 영업시간에 따라 실시간/익일 대기큐 등록.
 """
 import uuid
 
@@ -13,6 +12,7 @@ from flask import Blueprint, jsonify, render_template, request, session
 from app.extensions import db
 from app.models import Consult, ConsultStatus, Customer, HandoffReason, Message, Satisfaction, Sender
 from app.services import ai_client
+from app.services.business_hours import is_business_hours
 
 bp = Blueprint("chat", __name__)
 
@@ -37,11 +37,12 @@ def _get_or_create_customer() -> Customer:
 
 
 def _get_or_create_open_consult(customer: Customer) -> Consult:
-    """만족/불만족으로 이미 끝난 상담이면 새로 만들고, 진행 중이면 이어서 쓴다."""
+    """이미 끝났거나(completed) 대기큐에 들어간(waiting_*) 상담이 아니면 이어서 쓰고, 아니면 새로 만든다."""
     consult_id = session.get("consult_id")
     if consult_id:
         consult = db.session.get(Consult, consult_id)
-        if consult and consult.status not in (ConsultStatus.completed,):
+        open_statuses = (ConsultStatus.ai_resolved,)
+        if consult and consult.status in open_statuses:
             return consult
     consult = Consult(customer_id=customer.customer_id, status=ConsultStatus.ai_resolved)
     db.session.add(consult)
@@ -70,7 +71,7 @@ def chat():
     consult.topic = result.get("topic")
     consult.confidence = result.get("confidence")
     if result.get("handoff_needed"):
-        consult.status = ConsultStatus.waiting_realtime  # 영업시간 판단은 4단계에서 다듬는다
+        # 큐 상태(실시간/익일)는 아직 안 정한다 -- 이름을 받아야(/api/handoff) 확정된다.
         consult.handoff_reason = HandoffReason.ai_low_confidence
 
     db.session.commit()
@@ -97,11 +98,36 @@ def feedback():
         consult.satisfaction = Satisfaction.dissatisfied
         if consult.handoff_reason is None:
             consult.handoff_reason = HandoffReason.user_dissatisfied
-        if consult.status != ConsultStatus.waiting_realtime:
-            consult.status = ConsultStatus.waiting_realtime
 
     db.session.commit()
     return jsonify({
         "status": consult.status.value,
-        "handoff_needed": consult.status != ConsultStatus.completed,
+        "handoff_needed": consult.handoff_reason is not None and consult.status != ConsultStatus.completed,
+    })
+
+
+@bp.route("/api/handoff", methods=["POST"])
+def handoff():
+    """'상담사 연결하기' 이름 입력 제출 -> 영업시간에 따라 실시간/익일 대기큐 등록."""
+    data = request.get_json(silent=True) or {}
+    consult_id = data.get("consult_id")
+    name = (data.get("name") or "").strip()
+
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+
+    consult = db.session.get(Consult, consult_id) if consult_id else None
+    if consult is None:
+        return jsonify({"error": "consult not found"}), 404
+
+    consult.customer.name = name
+    consult.status = ConsultStatus.waiting_realtime if is_business_hours() else ConsultStatus.waiting_next_day
+    if consult.handoff_reason is None:
+        consult.handoff_reason = HandoffReason.user_dissatisfied
+
+    db.session.commit()
+
+    return jsonify({
+        "status": consult.status.value,
+        "business_hours": consult.status == ConsultStatus.waiting_realtime,
     })
