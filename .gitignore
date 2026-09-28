@@ -29,7 +29,7 @@ data/processed/*
 *.gguf
 *.faiss
 *.index
-models/
+/models/
 checkpoints/
 adapters/
 outputs/
