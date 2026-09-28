@@ -4,37 +4,130 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>돈톡 DonTalk</title>
-  <style>
-    body { font-family: sans-serif; max-width: 640px; margin: 24px auto; padding: 0 12px; }
-    #log { border: 1px solid #ddd; border-radius: 8px; height: 380px; overflow-y: auto; padding: 12px; }
-    .me { text-align: right; color: #1a56db; margin: 8px 0; }
-    .ai { margin: 8px 0; }
-    .meta { font-size: 12px; color: #888; }
-    form { display: flex; gap: 8px; margin-top: 12px; }
-    input { flex: 1; padding: 10px; }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
 </head>
 <body>
-  <h2>돈톡 💬</h2>
-  <p class="meta">돈에 대해 편하게 이야기하고, 금융 고민을 톡톡 풀어주는 AI</p>
-  <div id="log"></div>
-  <form id="f">
-    <input id="q" placeholder="궁금한 금융 문의를 입력하세요" autocomplete="off">
-    <button>전송</button>
-  </form>
+  <div class="phone-frame">
+
+    <!-- 인트로 화면 -->
+    <section id="screen-intro" class="screen active">
+      <div></div>
+      <div>
+        <span class="badge">24시간 AI 금융 상담</span>
+        <h1>돈 이야기가<br>더 이상 어렵지 않아요</h1>
+        <p>돈에 대해 편하게 이야기하고, 금융 고민을 톡톡 풀어주는<br>AI 상담 서비스를 만나보세요.</p>
+      </div>
+      <button class="start-btn" id="start-btn">시작하기 →</button>
+    </section>
+
+    <!-- 채팅 화면 -->
+    <section id="screen-chat" class="screen">
+      <div class="chat-header">
+        <span class="title">돈톡 AI</span>
+        <span class="status">영업중</span>
+      </div>
+      <div id="log"></div>
+      <button id="handoff-btn" class="handoff-btn" style="display:none;">상담사 연결하기</button>
+      <form id="send-form">
+        <input id="msg-input" placeholder="궁금한 금융 문의를 입력하세요" autocomplete="off">
+        <button type="submit">전송</button>
+      </form>
+    </section>
+
+    <!-- 상담 완료 모달 -->
+    <div id="modal-complete" class="modal-overlay">
+      <div class="modal-box">
+        <div class="check">✔</div>
+        <div><strong>상담 완료</strong></div>
+        <p style="font-size:13px;color:#888;">AI 답변에 만족해주셔서 감사합니다.<br>언제든 또 궁금한 점이 있으면 톡해주세요.</p>
+        <button id="modal-close-btn">확인</button>
+      </div>
+    </div>
+
+  </div>
+
   <script>
-    // TODO(웹 담당): 디자인 개선, 근거(sources) 표시, 상담사 연결 버튼(handoff_needed일 때)
-    const log = document.getElementById("log");
-    const add = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; };
-    document.getElementById("f").addEventListener("submit", async (e) => {
+    const logEl = document.getElementById("log");
+    const handoffBtn = document.getElementById("handoff-btn");
+    let currentConsultId = null;
+
+    document.getElementById("start-btn").addEventListener("click", () => {
+      document.getElementById("screen-intro").classList.remove("active");
+      document.getElementById("screen-chat").classList.add("active");
+    });
+
+    function addBubble(sender, text) {
+      const row = document.createElement("div");
+      row.className = "bubble-row " + (sender === "me" ? "me" : "ai");
+      const bubble = document.createElement("div");
+      bubble.className = "bubble " + (sender === "me" ? "me" : "ai");
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      logEl.appendChild(row);
+      logEl.scrollTop = logEl.scrollHeight;
+      return row;
+    }
+
+    function addFeedbackRow(consultId) {
+      const wrap = document.createElement("div");
+      wrap.className = "feedback-row";
+      wrap.innerHTML = `
+        <span class="meta">도움이 되었나요?</span>
+        <button data-ok="1">🙂 만족</button>
+        <button data-ok="0">🙁 불만족</button>
+      `;
+      wrap.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          wrap.querySelectorAll("button").forEach((b) => (b.disabled = true));
+          const satisfied = btn.dataset.ok === "1";
+          const res = await fetch("/api/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ consult_id: consultId, satisfied }),
+          });
+          const data = await res.json();
+          if (satisfied) {
+            document.getElementById("modal-complete").classList.add("active");
+          } else if (data.handoff_needed) {
+            handoffBtn.style.display = "block";
+          }
+        });
+      });
+      logEl.appendChild(wrap);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    document.getElementById("send-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const q = document.getElementById("q"); const message = q.value.trim(); if (!message) return;
-      add("me", message); q.value = "";
-      const res = await fetch("/api/chat", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({message}) });
+      const input = document.getElementById("msg-input");
+      const message = input.value.trim();
+      if (!message) return;
+      addBubble("me", message);
+      input.value = "";
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
       const data = await res.json();
-      add("ai", data.answer);
-      if (data.category) add("meta", `분야: ${data.category} / 주제: ${data.topic} / 확신도: ${data.confidence}`);
-      if (data.handoff_needed) add("meta", "⚠ 상담사 연결이 필요해 보입니다. (TODO: 연결 버튼)");
+      currentConsultId = data.consult_id;
+
+      addBubble("ai", data.answer);
+      addFeedbackRow(data.consult_id);
+
+      if (data.handoff_needed) {
+        handoffBtn.style.display = "block";
+      }
+    });
+
+    handoffBtn.addEventListener("click", () => {
+      // TODO(4단계): 이름 입력 폼 -> 대기큐 등록
+      alert("상담사 연결 흐름은 다음 단계에서 이어집니다 (이름 입력 -> 대기큐 등록).");
+    });
+
+    document.getElementById("modal-close-btn").addEventListener("click", () => {
+      document.getElementById("modal-complete").classList.remove("active");
     });
   </script>
 </body>
