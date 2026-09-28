@@ -1,0 +1,69 @@
+/* 돈톡 관리자 대시보드. agent.css와 같은 톤(색/여백)을 써서 상담사 화면과 통일감을 준다. */
+
+:root {
+  --accent: #f5a623;
+  --accent-dark: #d98c1a;
+  --border: #e5e5e5;
+  --text-sub: #8a8a8a;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  margin: 0;
+  background: #f5f6f8;
+  color: #2b2b2b;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+}
+.topbar .sub { color: var(--text-sub); font-size: 13px; margin-left: 10px; }
+.topbar a { color: var(--accent-dark); text-decoration: none; font-size: 14px; }
+
+.dashboard { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+.stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.stat-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card .label { font-size: 13px; color: var(--text-sub); }
+.stat-card .value { font-size: 26px; font-weight: 700; }
+.stat-card .sub { font-size: 12px; color: var(--text-sub); }
+
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.card h4 { margin: 0 0 14px; font-size: 14px; }
+.empty { color: var(--text-sub); font-size: 13px; }
+
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.bar-label { width: 70px; font-size: 12px; color: #555; flex-shrink: 0; }
+.bar-track { flex: 1; background: #f1f1f1; border-radius: 6px; height: 10px; overflow: hidden; }
+.bar-fill { background: var(--accent); height: 100%; }
+.bar-value { width: 110px; font-size: 12px; color: var(--text-sub); text-align: right; flex-shrink: 0; }
+
+.log-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.log-row:last-child { border-bottom: none; }
+.cat-tag { font-size: 11px; color: var(--text-sub); background: #f1f1f1; padding: 2px 8px; border-radius: 8px; margin-left: 6px; }
+.status-badge { font-size: 11px; padding: 3px 10px; border-radius: 10px; background: #fdecc8; color: var(--accent-dark); }
+.status-badge.completed { background: #ebfbee; color: #2f9e44; }
+.status-badge.in_progress { background: #e7f1ff; color: #1a56db; }
+.status-badge.waiting_next_day { background: #e7e7fb; color: #5a4fcf; }

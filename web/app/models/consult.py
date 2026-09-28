@@ -22,6 +22,14 @@ class Satisfaction(enum.Enum):
     dissatisfied = "dissatisfied"
 
 
+class QueueType(enum.Enum):
+    """이관 결정 시점(영업시간 내/외)에 한 번만 기록하고 이후 절대 안 바꾼다.
+    `status`는 진행되면서 계속 바뀌어서(waiting_realtime -> in_progress -> completed),
+    "원래 실시간 건이었는지 예약 건이었는지"를 나중에도 통계 낼 수 있으려면 별도 필드가 필요하다."""
+    realtime = "realtime"
+    next_day = "next_day"
+
+
 class Consult(db.Model):
     __tablename__ = "consult"
 
@@ -35,6 +43,7 @@ class Consult(db.Model):
 
     status = db.Column(db.Enum(ConsultStatus), nullable=False, default=ConsultStatus.ai_resolved)
     handoff_reason = db.Column(db.Enum(HandoffReason), nullable=True)
+    queue_type = db.Column(db.Enum(QueueType), nullable=True)  # 상담사 이관이 결정된 시점의 영업시간 내/외 (통계용, 불변)
     satisfaction = db.Column(db.Enum(Satisfaction), nullable=True)
     summary = db.Column(db.Text, nullable=True)
 

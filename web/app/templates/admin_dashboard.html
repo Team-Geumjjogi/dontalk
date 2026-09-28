@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>돈톡 — 관리자</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>돈톡 관리자 대시보드</strong>
+      <span class="sub">실시간 AI 상담 통계, 고객 문의 분석 리포트</span>
+    </div>
+    <a href="{{ url_for('auth.logout') }}">로그아웃</a>
+  </header>
+
+  <main class="dashboard">
+    <div class="stat-cards">
+      <div class="stat-card">
+        <span class="label">오늘 전체 상담 건수</span>
+        <span class="value">{{ total_today }}건</span>
+        <span class="sub">AI 단독 해결 {{ ai_only_today }}건 ({{ ai_only_rate }}%)</span>
+      </div>
+      <div class="stat-card">
+        <span class="label">상담사 연동 건수</span>
+        <span class="value">{{ handed_off }}건</span>
+        <span class="sub">실시간 연결 {{ realtime_count }}건 / 예약 접수 {{ reserved_count }}건</span>
+      </div>
+      <div class="stat-card">
+        <span class="label">고객 만족도 평균</span>
+        <span class="value">{{ satisfaction_rate ~ '%' if satisfaction_rate is not none else '- (피드백 없음)' }}</span>
+        <span class="sub">총 {{ feedback_total }}건 피드백 참여</span>
+      </div>
+      <div class="stat-card">
+        <span class="label">현재 대기 중인 상담</span>
+        <span class="value">{{ waiting_now }}건</span>
+        <span class="sub">등록 상담사 {{ agent_count }}명 / 평균 대기 {{ avg_wait_minutes }}분</span>
+      </div>
+    </div>
+
+    <div class="panels">
+      <div class="card">
+        <h4>상담 분야별 비중</h4>
+        {% for cat, n in category_counts %}
+          <div class="bar-row">
+            <span class="bar-label">{{ cat }}</span>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {{ (n / category_total * 100)|round(1) }}%;"></div>
+            </div>
+            <span class="bar-value">{{ n }}건 ({{ (n / category_total * 100)|round(1) }}%)</span>
+          </div>
+        {% else %}
+          <p class="empty">데이터가 없습니다.</p>
+        {% endfor %}
+      </div>
+
+      <div class="card">
+        <h4>최근 상담 로그</h4>
+        {% for c in recent_logs %}
+          <div class="log-row">
+            <div>
+              <strong>{{ c.customer.name or '고객' }}</strong>
+              <span class="cat-tag">{{ c.category or '분류중' }}</span>
+            </div>
+            <span class="status-badge {{ c.status.value }}">
+              {{ {
+                "ai_resolved": "AI 응대중", "waiting_realtime": "실시간 대기", "waiting_next_day": "예약 대기",
+                "in_progress": "상담 진행중", "completed": "완료"
+              }[c.status.value] }}
+            </span>
+          </div>
+        {% else %}
+          <p class="empty">아직 상담 기록이 없습니다.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+</body>
+</html>

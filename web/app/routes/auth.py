@@ -1,8 +1,7 @@
 """상담사/관리자 로그인. (고객은 로그인이 없다 — chat.py 에서 세션 쿠키만 씀)"""
 from flask import Blueprint, redirect, render_template, request, url_for
-from flask_login import current_user, login_required, login_user, logout_user
+from flask_login import login_required, login_user, logout_user
 
-from app.authz import role_required
 from app.models import Employee, EmployeeRole
 
 bp = Blueprint("auth", __name__)
@@ -23,7 +22,7 @@ def login():
     login_user(employee)  # 세션에 "이 사람이 로그인했다"를 기록 (Spring의 SecurityContext에 Authentication 채우는 것과 같은 역할)
 
     if employee.role == EmployeeRole.admin:
-        return redirect(url_for("auth.admin_home"))
+        return redirect(url_for("admin.dashboard"))
     return redirect(url_for("agent.queue"))
 
 
@@ -34,9 +33,4 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
-# 상담사 화면은 app/routes/agent.py 로 옮김 (5단계). 관리자 화면은 6단계에서 채운다.
-
-@bp.route("/admin/")
-@role_required(EmployeeRole.admin)
-def admin_home():
-    return f"관리자 홈 (개발 중) — 안녕하세요, {current_user.name}님"
+# 상담사 화면은 app/routes/agent.py, 관리자 화면은 app/routes/admin.py 로 옮김 (5, 6단계).

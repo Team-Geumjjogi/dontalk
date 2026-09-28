@@ -10,7 +10,7 @@ import uuid
 from flask import Blueprint, jsonify, render_template, request, session
 
 from app.extensions import db
-from app.models import Consult, ConsultStatus, Customer, HandoffReason, Message, Satisfaction, Sender
+from app.models import Consult, ConsultStatus, Customer, HandoffReason, Message, QueueType, Satisfaction, Sender
 from app.services import ai_client
 from app.services.business_hours import is_business_hours
 
@@ -121,7 +121,9 @@ def handoff():
         return jsonify({"error": "consult not found"}), 404
 
     consult.customer.name = name
-    consult.status = ConsultStatus.waiting_realtime if is_business_hours() else ConsultStatus.waiting_next_day
+    business_hours = is_business_hours()
+    consult.status = ConsultStatus.waiting_realtime if business_hours else ConsultStatus.waiting_next_day
+    consult.queue_type = QueueType.realtime if business_hours else QueueType.next_day  # 통계용, 이후 status가 바뀌어도 유지됨
     if consult.handoff_reason is None:
         consult.handoff_reason = HandoffReason.user_dissatisfied
 
