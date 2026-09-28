@@ -45,7 +45,7 @@ uvicorn app.main:app --reload --port 8000        # http://localhost:8000/docs
 
 # 터미널 2 - 웹 서버
 cd web && pip install -r requirements.txt
-flask --app app run --debug --port 5000          # http://localhost:5000
+flask --app app run --debug --port 5001          # http://localhost:5001
 ```
 > ⚠ **실행 위치가 중요합니다.** 위 명령은 각각 `ai/`, `web/` 폴더 안에서 실행해야 합니다.
 
