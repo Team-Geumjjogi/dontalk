@@ -1,0 +1,121 @@
+/* 돈톡 상담사 화면. 고객 화면(모바일 프레임)과 다르게, 이건 데스크톱 업무용 화면이라 전체 폭을 쓴다. */
+
+:root {
+  --accent: #f5a623;
+  --accent-dark: #d98c1a;
+  --border: #e5e5e5;
+  --text-sub: #8a8a8a;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  margin: 0;
+  background: #f5f6f8;
+  color: #2b2b2b;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+}
+.topbar .sub { color: var(--text-sub); font-size: 13px; margin-left: 10px; }
+.topbar a { color: var(--accent-dark); text-decoration: none; font-size: 14px; }
+
+.layout { display: flex; height: calc(100vh - 53px); }
+
+/* --- 대기큐 --- */
+.queue-panel {
+  width: 340px;
+  border-right: 1px solid var(--border);
+  background: white;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.queue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.count-badge {
+  background: #fdecc8;
+  color: var(--accent-dark);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.tabs a {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #f1f1f1;
+  color: #555;
+  text-decoration: none;
+}
+.tabs a.active { background: #2b2b2b; color: white; }
+
+.empty { padding: 24px; color: var(--text-sub); font-size: 13px; text-align: center; }
+
+.queue-item {
+  display: block;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+}
+.queue-item:hover { background: #fafafa; }
+.queue-item.selected { background: #fff8ec; border-left: 3px solid var(--accent); }
+.queue-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.queue-item .name { font-weight: 700; font-size: 14px; }
+.status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #fdecc8; color: var(--accent-dark); }
+.status-badge.waiting_next_day { background: #e7e7fb; color: #5a4fcf; }
+.preview { font-size: 13px; color: #555; margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-tag { font-size: 11px; color: var(--text-sub); background: #f1f1f1; padding: 2px 8px; border-radius: 8px; }
+
+/* --- 상세 패널 --- */
+.detail-panel { flex: 1; padding: 24px; overflow-y: auto; }
+.empty-detail { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-sub); text-align: center; }
+.empty-detail .sub { font-size: 13px; max-width: 360px; margin-top: 8px; }
+
+.detail-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.detail-header strong { font-size: 18px; }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.card.highlight { background: #fffaf0; border-color: #fdecc8; }
+.card h4 { margin: 0 0 8px; font-size: 13px; color: var(--text-sub); }
+.card p { margin: 4px 0; font-size: 14px; }
+
+.history { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; }
+.hist-row { font-size: 13px; }
+.hist-sender { font-weight: 700; margin-right: 6px; }
+.hist-row.customer .hist-sender { color: #1a56db; }
+.hist-row.ai .hist-sender { color: var(--accent-dark); }
+.hist-row.agent .hist-sender { color: #2f9e44; }
+
+.reply-form textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+.reply-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn-secondary, .btn-primary {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-secondary { background: #eee; color: #333; }
+.btn-primary { background: #2b2b2b; color: white; }

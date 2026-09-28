@@ -24,7 +24,7 @@ def login():
 
     if employee.role == EmployeeRole.admin:
         return redirect(url_for("auth.admin_home"))
-    return redirect(url_for("auth.agent_home"))
+    return redirect(url_for("agent.queue"))
 
 
 @bp.route("/logout")
@@ -34,13 +34,7 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
-# --- 역할별 홈. 실제 화면(대기큐/대시보드)은 5, 6단계에서 채운다. 지금은 권한 체크만 확인하는 용도. ---
-
-@bp.route("/agent/")
-@role_required(EmployeeRole.agent)
-def agent_home():
-    return f"상담사 홈 (개발 중) — 안녕하세요, {current_user.name}님"
-
+# 상담사 화면은 app/routes/agent.py 로 옮김 (5단계). 관리자 화면은 6단계에서 채운다.
 
 @bp.route("/admin/")
 @role_required(EmployeeRole.admin)

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>돈톡 — 상담사</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='agent.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>돈톡 상담사</strong>
+      <span class="sub">{{ current_user.name }}님 {% if current_user.department %}({{ current_user.department }} 담당){% endif %}</span>
+    </div>
+    <a href="{{ url_for('auth.logout') }}">로그아웃</a>
+  </header>
+
+  <div class="layout">
+    <!-- 대기큐 -->
+    <aside class="queue-panel">
+      <div class="queue-header">
+        <strong>상담사 대기 큐</strong>
+        <span class="count-badge">대기 {{ waiting_consults|length }}건</span>
+      </div>
+      <nav class="tabs">
+        {% for key, label in [("all", "전체"), ("은행", "은행"), ("보험", "보험"), ("증권", "증권"), ("reserved", "예약상담")] %}
+          <a href="{{ url_for('agent.queue', category=key) }}" class="{{ 'active' if category == key else '' }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+
+      {% if not waiting_consults %}
+        <p class="empty">대기 중인 상담이 없습니다.</p>
+      {% endif %}
+
+      {% for c in waiting_consults %}
+        {% set first_msg = c.messages|selectattr("sender.value", "equalto", "customer")|first %}
+        <a href="{{ url_for('agent.queue', category=category, consult_id=c.consult_id) }}"
+           class="queue-item {{ 'selected' if selected and selected.consult_id == c.consult_id else '' }}">
+          <div class="queue-item-top">
+            <span class="name">{{ c.customer.name or '고객' }}</span>
+            <span class="status-badge {{ c.status.value }}">{{ '예약' if c.status.value == 'waiting_next_day' else '대기중' }}</span>
+          </div>
+          <p class="preview">{{ (first_msg.content if first_msg else '')[:40] }}</p>
+          <span class="cat-tag">{{ c.category or '분류중' }}</span>
+        </a>
+      {% endfor %}
+    </aside>
+
+    <!-- 상담 상세 -->
+    <main class="detail-panel">
+      {% if not selected %}
+        <div class="empty-detail">
+          <p>상담 건을 선택해주세요</p>
+          <p class="sub">왼쪽 대기 큐에서 고객의 문의를 선택하시면 원본 문의, AI 분석 결과,
+             AI 답변 내역을 확인하고 상담을 진행할 수 있습니다.</p>
+        </div>
+      {% else %}
+        {% set first_msg = selected.messages|selectattr("sender.value", "equalto", "customer")|first %}
+        <div class="detail-header">
+          <strong>{{ selected.customer.name or '고객' }} 상세 문의</strong>
+          <span class="cat-tag">{{ selected.category or '분류중' }}</span>
+        </div>
+
+        <div class="cards">
+          <div class="card">
+            <h4>고객 원본 문의</h4>
+            <p>{{ first_msg.content if first_msg else '(없음)' }}</p>
+          </div>
+          <div class="card highlight">
+            <h4>AI 분석 결과</h4>
+            <p>분류 분야: {{ selected.category or '-' }}</p>
+            <p>주제: {{ selected.topic or '-' }}</p>
+            <p>신뢰도: {{ (selected.confidence * 100)|round|int if selected.confidence else '-' }}%</p>
+            <p>이관 사유: {{ '고객 불만족' if selected.handoff_reason and selected.handoff_reason.value == 'user_dissatisfied' else 'AI 답변 불가' if selected.handoff_reason else '-' }}</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>대화 내역</h4>
+          <div class="history">
+            {% for m in selected.messages %}
+              <div class="hist-row {{ m.sender.value }}">
+                <span class="hist-sender">{{ {"customer": "고객", "ai": "AI", "agent": "상담사"}[m.sender.value] }}</span>
+                <span class="hist-content">{{ m.content }}</span>
+              </div>
+            {% endfor %}
+          </div>
+          <!-- TODO(AI 연결 후): RAG 검색 결과의 꼬리질문/예상답변을 여기 같이 보여준다 -->
+        </div>
+
+        <form method="post" action="{{ url_for('agent.reply', consult_id=selected.consult_id) }}" class="reply-form">
+          <h4>상담 진행 및 전문 답변 입력</h4>
+          <textarea name="content" rows="4" placeholder="고객에게 전달할 답변을 입력하세요"></textarea>
+          <div class="reply-actions">
+            <button type="submit" name="action" value="save" class="btn-secondary">임시 저장</button>
+            <button type="submit" name="action" value="complete" class="btn-primary">상담 완료 및 종료</button>
+          </div>
+        </form>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>
