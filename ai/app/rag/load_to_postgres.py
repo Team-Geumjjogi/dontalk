@@ -9,8 +9,11 @@ dontalk/
 실행:
     python load_to_postgres.py                    # 전체 적재 + 인덱스 생성
     python load_to_postgres.py --limit 100        # 상위 100건만 테스트 적재
+    python load_to_postgres.py --batch-size       # 배치 크기 설정 (기본: 500)
+    python load_to_postgres.py --table            # 적재할 테이블명 (기본: financial_consulting_qa)
     python load_to_postgres.py --truncate         # 테이블 비운 뒤 다시 적재
     python load_to_postgres.py --skip-duplicates  # qa_id 중복 행은 건너뛰고 적재
+    python load_to_postgres.py --no-index         # 적재 후 HNSW 인덱스를 생성하지 않음
     python load_to_postgres.py --index-only       # 적재 없이 인덱스만 생성
  
 .env 예시:
@@ -56,7 +59,8 @@ load_dotenv(_env_path if _env_path.exists() else None)
 class LoaderConfig:
 
     project_root: Path = PROJECT_ROOT
-    table_name: str = "financial_consulting_qa"
+    # table_name: str = "financial_consulting_qa"
+    table_name: str = "fin"
     batch_size: int = 500                   # 한 번에 INSERT할 행 수
     maintenance_work_mem: str = "1GB"       # HNSW 빌드 시 메모리 (클수록 빠름)
     parquet_path: Path = field(init=False)
@@ -211,7 +215,7 @@ class PostgresVectorLoader:
             cur.execute(query)
         conn.commit()
 
-        print(f"새로운 테이블({table}) 생성 완료")
+        print(f"새로운 테이블({self.config.table_name}) 생성 완료")
 
     # 테이블 초기화
     def truncate(self, conn) -> None:
@@ -324,6 +328,8 @@ def parse_args() -> argparse.Namespace:
                         help="상위 N건만 테스트 적재 (기본: 전체)")
     parser.add_argument("--batch-size", type=int, default=500,
                         help="INSERT 배치 크기 (기본: 500)")
+    parser.add_argument("--table", type=str, default="financial_consulting_qa",
+                        help="적재할 테이블명 (기본: financial_consulting_qa)")
     parser.add_argument("--truncate", action="store_true",
                         help="적재 전 테이블 비우기")
     parser.add_argument("--skip-duplicates", action="store_true",
@@ -337,7 +343,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    config = LoaderConfig(batch_size=args.batch_size)
+    config = LoaderConfig(batch_size=args.batch_size, table_name=args.table)
     loader = PostgresVectorLoader(config)
     loader.run(
         limit=args.limit,
