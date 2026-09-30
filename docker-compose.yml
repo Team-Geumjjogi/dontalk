@@ -1,1 +1,17 @@
-# 후순위: 이번 프로젝트는 venv로 진행합니다. 시간이 남으면 작성하세요.
+# 로컬 개발용 Vector DB (pgvector). 팀 공용 DB가 아니라 각자 자기 컴퓨터에서 띄워서 씁니다.
+# 실행: docker compose up -d
+# 접속 정보는 .env 파일에서 읽어옵니다 (.env.example 참고). .env는 git에 올라가지 않습니다.
+services:
+  vectordb:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - vectordb_data:/var/lib/postgresql/data
+
+volumes:
+  vectordb_data:

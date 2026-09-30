@@ -29,7 +29,7 @@ data/processed/*
 *.gguf
 *.faiss
 *.index
-models/
+/models/
 checkpoints/
 adapters/
 outputs/
@@ -44,3 +44,7 @@ wandb/
 .DS_Store
 .vscode/
 .idea/
+.claude/
+
+# ===== 개인용 세션 컨텍스트 (팀 공유 문서 아님) =====
+CLAUDE.md
