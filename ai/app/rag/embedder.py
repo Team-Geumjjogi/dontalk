@@ -10,8 +10,11 @@ dontalk/
 
 실행:
     python embedder.py
-    python embedder.py --chunk-size 4000
-    python embedder.py --reset          # 기존 체크포인트 삭제 후 처음부터 다시
+    python embedder.py --input ../../../data/processed/df_output.xlsx     # 입력 파일 경로 설정 (기본: dontalk/data/processed/df_output.xlsx)
+    python embedder.py --output ../../../data/processed/df_add_embedding.parquet     # 실행 결과 파일(parquet 파일) 경로 설정 (기본: dontalk/data/processed/df_add_embedding.parquet)
+    python embedder.py --chunk-size 4000    # 청크 당 처리 행 수 설정 (기본: 8000)
+    python embedder.py --reset              # 기존 체크포인트 삭제 후 처음부터 다시
+    python embedder.py --limit 50           # 상위 50개의 데이터만 활용
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ class EmbedderConfig:
     project_root: Path = PROJECT_ROOT
     model_name: str = "dragonkue/snowflake-arctic-embed-l-v2.0-ko"
     chunk_size: int = 8000
+    limit : int | None = None
     input_path: Path = field(init=False)
     output_path: Path = field(init=False)
     checkpoint_dir: Path = field(init=False)
@@ -111,6 +115,10 @@ class QAEmbedder:
             raise KeyError(f"입력 데이터에 필요한 컬럼이 없습니다: {missing}")
 
         df = df[list(self.column_map)].rename(columns=self.column_map).copy()
+
+        if self.config.limit is not None:
+            df = df.head(self.config.limit).copy()
+            print(f"[TEST] 상위 {self.config.limit}건만 처리합니다.")
 
         for src_col, _, _ in self.targets:
             n_empty = df[src_col].isna().sum()
@@ -281,12 +289,16 @@ def parse_args() -> argparse.Namespace:
         "--reset", action="store_true",
         help="기존 체크포인트를 삭제하고 처음부터 다시 처리",
     )
+    parser.add_argument(
+        "--limit", type=int, default=None,
+        help="테스트용: 상위 N건만 처리 (기본: 전체)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = EmbedderConfig(chunk_size=args.chunk_size)
+    config = EmbedderConfig(chunk_size=args.chunk_size, limit=args.limit)
     embedder = QAEmbedder(config=config)
     embedder.run(input_path=args.input, output_path=args.output, reset=args.reset)
 
