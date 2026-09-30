@@ -19,6 +19,8 @@ dontalk/
     POSTGRESQL_USER=...
     POSTGRESQL_PASSWORD=...
     POSTGRESQL_DBNAME=...
+    DB_SSLMODE=require          # SSL /연결 옵션 필요 시 추가 (미설정 시 기본값 prefer)
+    DB_SSLNEGOTIATION=direct    # SSL /연결 옵션 필요 시 추가 (미설정 시 기본값 direct)
 """
 
 
@@ -77,6 +79,15 @@ class LoaderConfig:
         missing = [env_keys[k] for k, v in config.items() if not v]
         if missing:
             raise EnvironmentError(f".env에 다음 값이 없습니다: {missing}")
+
+        # SSL / 연결 옵션
+        #   로컬 Docker: .env에 안 넣으면 기본값(prefer, direct 미설정)으로 문제없이 접속됨
+        #   팀 공유 클라우드 DB: .env에 DB_SSLMODE=require, DB_SSLNEGOTIATION=direct 추가 필요
+        config["sslmode"] = os.getenv("DB_SSLMODE", "prefer")
+        sslnegotiation = os.getenv("DB_SSLNEGOTIATION")
+        if sslnegotiation:
+            config["sslnegotiation"] = sslnegotiation
+        config["connect_timeout"] = int(os.getenv("DB_CONNECT_TIMEOUT", "10"))
         return config
 
 
@@ -90,6 +101,8 @@ TEXT_COLUMNS: list[str] = [
 ]
 EMBEDDING_COLUMN = "embedding_q"
 INSERT_COLUMNS: list[str] = TEXT_COLUMNS + [EMBEDDING_COLUMN]
+
+NOT_NULL_COLUMNS: list[str] = ["instruction", "question", "consulting_category"]
 
 # 빈 문자열("")을 NULL로 저장할 컬럼
 EMPTY_TO_NULL: list[str] = [
@@ -170,12 +183,21 @@ class PostgresVectorLoader:
 
     # 테이블 생성 (이미 있으면 건너뜀)
     def ensure_table(self, conn, dim: int) -> None:
-        text_cols = sql.SQL(",\n").join(
-            sql.SQL("{} TEXT").format(sql.Identifier(c)) for c in TEXT_COLUMNS[1:]
-        )
+
+        col_defs = []
+        for c in TEXT_COLUMNS[1:]:
+            col_sql = sql.SQL("{} TEXT").format(sql.Identifier(c))
+            if c in NOT_NULL_COLUMNS:
+                col_sql = sql.SQL("{} NOT NULL").format(col_sql)
+            col_defs.append(col_sql)
+
+        text_cols = sql.SQL(",\n").join(col_defs)
+
+
         query = sql.SQL("""
             CREATE TABLE IF NOT EXISTS {table} (
-                qa_id TEXT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
+                qa_id TEXT NOT NULL UNIQUE,
                 {text_cols},
                 {emb} vector({dim})
             );
@@ -188,6 +210,8 @@ class PostgresVectorLoader:
         with conn.cursor() as cur:
             cur.execute(query)
         conn.commit()
+
+        print(f"새로운 테이블({table}) 생성 완료")
 
     # 테이블 초기화
     def truncate(self, conn) -> None:
