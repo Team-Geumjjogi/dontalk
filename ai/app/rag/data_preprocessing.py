@@ -8,8 +8,6 @@ dontalk/
 실행:
     python data_preprocessing.py
     python data_preprocessing.py --output ../../../data/processed/df_output.xlsx
-
-* data 디렉토리 내 "processed" 디렉토리 새로 생성됨 *
 """
 
 from __future__ import annotations
