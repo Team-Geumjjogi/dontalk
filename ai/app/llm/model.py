@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import RLock
 
 from .prompts import INSTRUCTION
-from . import config
+from ..core import config
 
 MODEL_ID = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
 ADAPTER_ROOT = Path(__file__).resolve().parent.parent / "adapters"
