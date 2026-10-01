@@ -51,6 +51,21 @@ def _get_or_create_open_consult(customer: Customer) -> Consult:
     return consult
 
 
+HISTORY_LIMIT = 6  # AI 서버에 같이 보내는 이전 대화 개수
+_HISTORY_ROLE = {Sender.customer: "user", Sender.ai: "assistant"}  # 상담사(agent) 발화는 AI 대화가 아니라 제외
+
+
+def _recent_history(consult: Consult) -> list[dict]:
+    """이번 상담(consult)의 최근 고객/AI 발화를 오래된 순으로 돌려준다. 새 상담이면 빈 목록."""
+    rows = db.session.scalars(
+        db.select(Message)
+        .where(Message.consult_id == consult.consult_id, Message.sender.in_(list(_HISTORY_ROLE)))
+        .order_by(Message.message_id.desc())
+        .limit(HISTORY_LIMIT)
+    ).all()
+    return [{"role": _HISTORY_ROLE[m.sender], "content": m.content} for m in reversed(rows)]
+
+
 @bp.route("/api/chat", methods=["POST"])
 def chat():
     message = (request.get_json(silent=True) or {}).get("message", "").strip()
@@ -61,15 +76,18 @@ def chat():
     customer = _get_or_create_customer()
     consult = _get_or_create_open_consult(customer)
 
+    history = _recent_history(consult)  # 현재 질문을 저장하기 전에 읽어서 '이전 대화'만 담는다
     db.session.add(Message(consult_id=consult.consult_id, sender=Sender.customer, content=message))
 
-    result = ai_client.ask(session["session_id"], message)
+    result = ai_client.ask(session["session_id"], message, history)
 
     db.session.add(Message(consult_id=consult.consult_id, sender=Sender.ai, content=result.get("answer", "")))
 
-    consult.category = result.get("category")
-    consult.topic = result.get("topic")
-    consult.confidence = result.get("confidence")
+    # 인사/감사 같은 응답은 분야가 없다(None). 이미 판단된 분야를 지우지 않도록 값이 있을 때만 갱신한다.
+    if result.get("category") is not None:
+        consult.category = result["category"]
+        consult.topic = result.get("topic")
+        consult.confidence = result.get("confidence")
     if result.get("handoff_needed"):
         # 큐 상태(실시간/익일)는 아직 안 정한다 -- 이름을 받아야(/api/handoff) 확정된다.
         consult.handoff_reason = HandoffReason.ai_low_confidence

@@ -9,8 +9,19 @@ AI가 완성되기 전에는 `AI_MOCK_MODE=true` 로 가짜 응답을 받으면�
 ## POST /chat
 **요청**
 ```json
-{ "session_id": "abc-123", "message": "대출 만기 연장하려면 어떻게 해야 하나요?" }
+{
+  "session_id": "abc-123",
+  "message": "그럼 수수료는 얼마예요?",
+  "history": [
+    { "role": "user", "content": "대출 만기 연장하려면 어떻게 해야 하나요?" },
+    { "role": "assistant", "content": "앱의 대출관리 메뉴에서 신청하실 수 있어요." }
+  ]
+}
 ```
+| 필드 | 설명 |
+|---|---|
+| `history` | **선택.** 이번 상담의 직전 대화(오래된 순, 웹이 최근 6건 정도 전달). `role` 은 고객 `user` / AI `assistant`. 없으면 질문 한 건으로만 처리. 짧은 후속 질문("그럼 수수료는요?")을 이해하는 데 쓰입니다. |
+
 **응답**
 ```json
 {

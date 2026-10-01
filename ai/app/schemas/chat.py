@@ -1,12 +1,19 @@
 """web ↔ ai 가 주고받는 데이터 형식. 자세한 설명은 docs/api-spec.md 참고."""
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel
+
+
+class ChatTurn(BaseModel):
+    """이번 상담의 이전 발화 1건 (후속 질문을 이해하기 위한 대화 기록)"""
+    role: Literal["user", "assistant"]   # 고객 = user, AI = assistant
+    content: str
 
 
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    history: List[ChatTurn] = []   # 직전 대화(오래된 순). 없으면 질문 한 건으로만 처리
 
 
 class Source(BaseModel):

@@ -47,19 +47,22 @@ def format_docs(docs: List[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_messages(question: str, docs: Optional[List[dict]] = None) -> List[dict]:
-    """Ollama /api/chat 에 보낼 messages(system/user)를 만든다."""
+def build_messages(question: str, docs: Optional[List[dict]] = None, history: Optional[List[dict]] = None) -> List[dict]:
+    """Ollama /api/chat 에 보낼 messages(system/이전 대화/user)를 만든다.
+
+    history 는 [{"role": "user"|"assistant", "content": "..."}] (오래된 순). 참고 문서는 이번 질문에만 붙인다.
+    """
     user = f"### 고객 문의\n{question}"
     if docs:
         user = f"### 참고 정보\n{format_docs(docs)}\n\n{user}"
-    return [{"role": "system", "content": INSTRUCTION + _STYLE}, {"role": "user", "content": user}]
+    return [{"role": "system", "content": INSTRUCTION + _STYLE}, *(history or []), {"role": "user", "content": user}]
 
 
-def generate(question: str, docs: Optional[List[dict]] = None) -> str:
-    """질문(+RAG 검색 문서)을 보내 base 모델의 답변 텍스트를 받는다."""
+def generate(question: str, docs: Optional[List[dict]] = None, history: Optional[List[dict]] = None) -> str:
+    """질문(+RAG 검색 문서, 이전 대화)을 보내 base 모델의 답변 텍스트를 받는다."""
     body = {
         "model": OLLAMA_MODEL,
-        "messages": build_messages(question, docs),
+        "messages": build_messages(question, docs, history),
         "stream": False,
         "options": {"temperature": LLM_TEMPERATURE, "num_predict": LLM_MAX_TOKENS, "num_ctx": LLM_NUM_CTX},
     }
