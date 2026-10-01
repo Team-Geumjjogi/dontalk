@@ -2,7 +2,7 @@
 
 지금은 mock 응답만 돌려줍니다. 담당자가 아래 TODO 를 채워 넣으세요.
 """
-from app.llm import config
+from app.core import config
 from app.schemas.chat import ChatRequest, ChatResponse, Source
 
 
