@@ -93,3 +93,25 @@ def test_admin_dashboard_counts(app, login):
     html = login("admin@test.com").get("/admin/").get_data(as_text=True)
     assert "AI 단독 해결 2건" in html and "현재 대기 중인 상담" in html
     assert "상담 분야별 비중" in html and "최근 상담 로그" in html
+
+
+def count_queries(app, call):
+    """call() 을 실행하는 동안 DB 로 나간 SQL 문장 수."""
+    statements = []
+    with app.app_context():
+        listener = lambda *args: statements.append(1)
+        event.listen(db.engine, "before_cursor_execute", listener)
+        call()
+        event.remove(db.engine, "before_cursor_execute", listener)
+    return len(statements)
+
+
+def test_dashboard_query_count_stays_small_regardless_of_data(app, login):
+    """대시보드는 데이터가 늘어도 쿼리 수가 같고(원격 DB 지연 방지), 고정 상한 안이어야 한다."""
+    admin = login("admin@test.com")
+    for _ in range(3):
+        add_consult(app, "은행", ai_category="은행")
+    few = count_queries(app, lambda: admin.get("/admin/"))
+    for _ in range(25):
+        add_consult(app, "보험", status=ConsultStatus.ended, ai_category="보험")
+    assert count_queries(app, lambda: admin.get("/admin/")) == few <= 6

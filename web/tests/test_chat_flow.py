@@ -130,3 +130,20 @@ def test_new_chat_after_end_starts_new_consult(app, client, ai):
     client.post("/api/chat", json={"message": "또 질문"})
     with app.app_context():
         assert sorted(c.status.value for c in db.session.scalars(db.select(Consult))) == ["chatting", "ended"]
+
+
+def test_chat_query_count_is_small(app, client, ai):
+    """질문 하나당 DB 왕복이 늘지 않게 상한을 둔다 (공용 DB가 원격이라 쿼리 수가 곧 응답 지연)."""
+    from sqlalchemy import event
+
+    def count(call):
+        statements = []
+        with app.app_context():
+            listener = lambda *args: statements.append(1)
+            event.listen(db.engine, "before_cursor_execute", listener)
+            call()
+            event.remove(db.engine, "before_cursor_execute", listener)
+        return len(statements)
+
+    assert count(lambda: client.post("/api/chat", json={"message": "첫 질문"})) <= 5    # 고객/상담 생성 + 메시지 저장 (이전 대화 조회는 생략)
+    assert count(lambda: client.post("/api/chat", json={"message": "두 번째 질문"})) <= 4  # 상담 조회 + 이전 대화 + 저장

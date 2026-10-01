@@ -59,16 +59,16 @@ def _current_consult() -> Consult | None:
     return db.session.get(Consult, consult_id) if consult_id else None
 
 
-def _get_or_create_open_consult() -> Consult:
-    """AI와 상담 중(chatting)인 상담을 이어서 쓰고, 없거나 이미 끝났으면 새로 만든다."""
+def _get_or_create_open_consult() -> tuple[Consult, bool]:
+    """AI와 상담 중(chatting)인 상담을 이어서 쓰고, 없거나 이미 끝났으면 새로 만든다. (상담, 새로 만들었는지)"""
     consult = _current_consult()
     if consult and consult.status == ConsultStatus.chatting:
-        return consult
+        return consult, False
     consult = Consult(customer_id=_get_or_create_customer().customer_id, status=ConsultStatus.chatting)
     db.session.add(consult)
     db.session.flush()
     session["consult_id"] = consult.consult_id
-    return consult
+    return consult, True
 
 
 def _recent_history(consult: Consult) -> list[dict]:
@@ -98,8 +98,8 @@ def chat():
         return jsonify({"error": "message is empty"}), 400
     session.setdefault("session_id", str(uuid.uuid4()))
 
-    consult = _get_or_create_open_consult()
-    history = _recent_history(consult)  # 현재 질문을 저장하기 전에 읽어서 '이전 대화'만 담는다
+    consult, is_new = _get_or_create_open_consult()
+    history = [] if is_new else _recent_history(consult)  # 새 상담이면 이전 대화가 없으니 조회를 건너뛴다(DB 왕복 절감). 현재 질문을 저장하기 전에 읽는다
     db.session.add(Message(consult_id=consult.consult_id, sender=Sender.customer, content=message))
 
     result = ai_client.ask(session["session_id"], message, history)
@@ -162,7 +162,7 @@ def handoff():
 
     consult = _current_consult()
     if consult is None:  # 아무 말도 안 하고 바로 '상담사 연결'을 누른 경우
-        consult = _get_or_create_open_consult()
+        consult, _ = _get_or_create_open_consult()
     if consult.status in (ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day, ConsultStatus.completed):
         return jsonify({"error": "already handed off"}), 409
 
