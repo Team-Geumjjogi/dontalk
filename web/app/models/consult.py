@@ -8,6 +8,7 @@ import enum
 from app.extensions import db, utcnow
 
 CATEGORIES = ("은행", "보험", "증권")  # 분야 값. consult.category / ai_category / employee.department / consult_transfer 가 모두 같은 값을 쓴다.
+UNCLASSIFIED = "미분류"                 # AI가 분야를 못 정한 상담. DB에는 category=NULL 로 저장하고, consult_transfer.from_category 에만 이 문자열을 쓴다.
 
 
 class ConsultStatus(enum.Enum):
@@ -93,6 +94,11 @@ class Consult(db.Model):
     closed_at = db.Column(db.DateTime(timezone=True), nullable=True)   # 고객이 종료했거나 상담사가 완료한 시각
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    @property
+    def first_question(self) -> str:
+        """고객이 처음 보낸 질문 (목록 미리보기, 상세의 "원본 문의")."""
+        return next((m.content for m in self.messages if m.sender.value == "customer"), "")
 
     customer = db.relationship("Customer", back_populates="consults")
     employee = db.relationship("Employee", back_populates="consults")

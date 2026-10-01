@@ -1,26 +1,9 @@
 """상담사(분야별 큐, 상담 메모로 종료)와 관리자 대시보드."""
-from datetime import datetime, timezone
-
 from sqlalchemy import event
 
 from app.extensions import db
-from app.models import Consult, ConsultStatus, Customer, Message, Satisfaction, Sender
-
-
-def add_consult(app, category, status=ConsultStatus.waiting_realtime, question="질문", **fields):
-    with app.app_context():
-        customer = Customer(name=f"{category or '미분류'}고객")
-        db.session.add(customer)
-        db.session.flush()
-        consult = Consult(customer_id=customer.customer_id, category=category, status=status,
-                          handoff_at=datetime.now(timezone.utc), **fields)
-        db.session.add(consult)
-        db.session.flush()
-        db.session.add_all([Message(consult_id=consult.consult_id, sender=Sender.customer, content=question),
-                            Message(consult_id=consult.consult_id, sender=Sender.ai, content="답변",
-                                    sources=[{"snippet": "사례", "topic": "t", "score": 0.7, "follow_up_question": "꼬리질문?", "output": "종합"}])])
-        db.session.commit()
-        return consult.consult_id
+from app.models import Consult, ConsultStatus, Satisfaction
+from helpers import add_consult
 
 
 def test_agent_sees_only_own_department_and_unclassified(app, login):
@@ -31,7 +14,7 @@ def test_agent_sees_only_own_department_and_unclassified(app, login):
     html = login("bank@test.com").get("/agent/").get_data(as_text=True)
     assert "은행 문의" in html and "미분류 문의" in html
     assert "보험 문의" not in html and "아직 상담 중" not in html
-    assert "은행 대기 큐" in html and "대기 2건" in html
+    assert "은행 상담" in html and "대기 2건" in html
 
 
 def test_agent_detail_shows_analysis_and_sources(app, login):

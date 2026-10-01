@@ -1,14 +1,19 @@
-{#- 상담사 화면: 왼쪽 내 분야 대기 큐, 오른쪽 상담 상세 + 상담 메모. 상담사는 고객과 대화하지 않고 메모만 남긴다. -#}
+{#- 상담사 화면: 왼쪽 목록(대기 큐 / 내 완료), 오른쪽 상담 상세.
+    대기 건: 상담 메모 저장(종료) 또는 다른 분야로 이관. 완료 건: 읽기 전용. 상담사는 고객과 대화하지 않는다. -#}
 {% extends "layouts/staff.html" %}
 {% from "components/badge.html" import badge %}
 {% from "components/button.html" import button %}
 {% from "components/card.html" import card %}
+{% from "components/category_badge.html" import category_badge %}
+{% from "components/consult_analysis.html" import consult_analysis %}
 {% from "components/conversation.html" import conversation %}
 {% from "components/empty_state.html" import empty_state %}
 {% from "components/field.html" import field %}
-{% from "components/key_value.html" import key_value %}
+{% from "components/select.html" import select %}
 {% from "components/source_list.html" import source_list %}
 {% from "components/status_badge.html" import status_badge %}
+{% from "components/tabs.html" import tabs %}
+{% from "components/transfer_log.html" import transfer_log %}
 
 {% block title %}돈톡 — 상담사{% endblock %}
 
@@ -20,60 +25,32 @@
 
 {% block content %}
 <div class="agent-layout">
-  <aside class="agent-queue" aria-label="대기 큐">
+  <aside class="agent-queue" aria-label="상담 목록">
     <header class="agent-queue__header">
-      <h1 class="agent-queue__title">{{ current_user.department }} 대기 큐</h1>
-      {{ badge("대기 " ~ queue_items|length ~ "건", tone="warning") }}
+      <h1 class="agent-queue__title">{{ current_user.department }} 상담</h1>
     </header>
-
-    {% if not queue_items %}
-      {{ empty_state("대기 중인 상담이 없습니다", "새 상담이 접수되면 여기에 표시됩니다.") }}
-    {% endif %}
-
-    <ul class="queue-list">
-      {% for item in queue_items %}
-        {% set c = item.consult %}
-        {% set is_selected = selected and selected.consult_id == c.consult_id %}
-        <li>
-          <a class="queue-item{{ ' queue-item--selected' if is_selected }}" href="{{ url_for('agent.queue', consult_id=c.consult_id) }}"
-             {%- if is_selected %} aria-current="true"{% endif %}>
-            <span class="queue-item__top">
-              <strong>{{ c.customer.name or "고객" }}</strong>
-              {{ status_badge(c) }}
-            </span>
-            <span class="queue-item__preview">{{ item.preview }}</span>
-            <span class="queue-item__bottom">
-              {{ badge(c.category or "미분류") }}
-              <span class="queue-item__time">{{ c.handoff_at|kst }}</span>
-            </span>
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
+    {{ tabs([("waiting", "대기 " ~ waiting_count ~ "건", url_for("agent.queue")), ("done", "내 완료", url_for("agent.queue", tab="done"))], tab) }}
+    <div id="queue-items"{% if tab == "waiting" %} data-poll-url="{{ url_for('agent.queue_items') }}" data-selected="{{ selected.consult_id if selected }}"{% endif %}>
+      {% include "partials/agent_queue_items.html" %}
+    </div>
   </aside>
 
   <section class="agent-detail" aria-label="상담 상세">
     {% if not selected %}
-      {{ empty_state("상담 건을 선택해 주세요", "왼쪽 대기 큐에서 고객 문의를 선택하면 원본 문의, AI 분석 결과, 대화 내역을 확인하고 상담을 정리할 수 있습니다.") }}
+      {{ empty_state("상담 건을 선택해 주세요", "왼쪽 목록에서 상담을 선택하면 원본 문의, AI 분석 결과, 대화 내역을 확인하고 상담을 정리할 수 있습니다.") }}
     {% else %}
       {% set c = selected %}
+      {% set is_waiting = c.status.value.startswith("waiting") %}
       <header class="agent-detail__header">
         <h2 class="agent-detail__title">{{ c.customer.name or "고객" }} 상세 문의</h2>
-        {{ badge(c.category or "미분류") }}
+        {{ category_badge(c.category) }}
         {{ status_badge(c) }}
+        {% if not is_waiting %}<span class="agent-detail__meta">종료 {{ c.closed_at|kst }}</span>{% endif %}
       </header>
 
       <div class="agent-detail__grid">
-        {% call card(title="고객 원본 문의") %}{{ selected_question or "(없음)" }}{% endcall %}
-        {% call card(title="AI 분석 결과", tone="accent") %}
-          {{ key_value([
-            ("분류 분야", c.category or "미분류"),
-            ("주제", c.topic),
-            ("신뢰도", (c.confidence * 100)|round|int ~ "%" if c.confidence is not none else None),
-            ("이관 사유", c.handoff_reason.label if c.handoff_reason else None),
-            ("상세", c.handoff_detail),
-          ]) }}
-        {% endcall %}
+        {% call card(title="고객 원본 문의") %}<span class="prewrap">{{ selected_question or "(없음)" }}</span>{% endcall %}
+        {{ consult_analysis(c) }}
       </div>
 
       {% call card(title="대화 내역") %}{{ conversation(c.messages) }}{% endcall %}
@@ -83,14 +60,37 @@
         {% call card(title="AI가 참고한 상담 사례") %}{{ source_list(ai_sources[-1]) }}{% endcall %}
       {% endif %}
 
-      <form class="card stack" method="post" action="{{ url_for('agent.complete', consult_id=c.consult_id) }}">
-        <h3 class="card__title">상담 정리</h3>
-        {{ field("summary", "상담 메모 (정리·요약)", type="textarea", rows=5, required=True,
-                 placeholder="상담 내용을 짧게 정리해 주세요.",
-                 hint="저장하면 상담이 종료되고 대기 큐에서 사라집니다. 고객에게는 전달되지 않습니다.") }}
-        <div>{{ button("저장하고 상담 종료", type="submit") }}</div>
-      </form>
+      {% if c.transfers %}
+        {% call card(title="분야 이관 이력") %}{{ transfer_log(c.transfers) }}{% endcall %}
+      {% endif %}
+
+      {% if is_waiting %}
+        <form class="card stack" method="post" action="{{ url_for('agent.complete', consult_id=c.consult_id) }}">
+          <h3 class="card__title">상담 정리</h3>
+          {{ field("summary", "상담 메모 (정리·요약)", type="textarea", rows=5, required=True,
+                   placeholder="상담 내용을 짧게 정리해 주세요.",
+                   hint="저장하면 상담이 종료되고 대기 큐에서 사라집니다. 고객에게는 전달되지 않습니다."
+                        ~ (" 미분류 상담이라 종료하면 " ~ current_user.department ~ " 분야로 배정됩니다." if not c.category else "")) }}
+          <div>{{ button("저장하고 상담 종료", type="submit") }}</div>
+        </form>
+
+        <details class="card transfer-card">
+          <summary>{{ "이 상담의 분야를 직접 배정하시겠어요?" if not c.category else "이 상담이 다른 분야 문의인가요?" }}</summary>
+          <form class="stack" method="post" action="{{ url_for('agent.transfer', consult_id=c.consult_id) }}">
+            <p class="transfer-card__help">해당 분야 상담사의 대기 큐로 넘어가고, 이관 기록은 AI 분류 정확도 집계에 쓰입니다.</p>
+            {{ select("to_category", "이관할 분야", transfer_options, required=True) }}
+            {{ field("reason", "이관 사유 (선택)", placeholder="예: 보험금 청구 문의라 보험 상담사가 필요함") }}
+            <div>{{ button("분야 이관하기", type="submit", variant="secondary") }}</div>
+          </form>
+        </details>
+      {% else %}
+        {% call card(title="상담 메모") %}<span class="prewrap">{{ c.summary or "(메모 없음)" }}</span>{% endcall %}
+      {% endif %}
     {% endif %}
   </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {% if tab == "waiting" %}<script type="module" src="{{ url_for('static', filename='js/agent.js') }}"></script>{% endif %}
 {% endblock %}
