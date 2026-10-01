@@ -32,6 +32,7 @@ MIN_CONFIDENCE = float(os.getenv("RAG_MIN_CONFIDENCE", "0.6"))
 
 MAX_HISTORY_TURNS = 6      # LLM 에 넘기는 이전 대화 개수
 MAX_TURN_CHARS = 500       # 이전 발화 1건당 최대 글자 수
+SOURCE_OUTPUT_MAX = 800    # 상담사 화면용 근거 문서의 종합 답변 최대 글자 수
 FOLLOW_UP_MAX_CHARS = 15   # 이 길이 이하면 후속 질문으로 보고 직전 질문을 붙여서 검색
 
 MSG_CONTACT = "상담사 연결을 도와드릴게요."
@@ -163,6 +164,8 @@ def _sources(docs: List[dict]) -> List[Source]:
             topic=d.get("consulting_topic") or "",
             score=round(d["similarity"], 4),
             snippet=(d.get("question") or d.get("full_source") or "")[:120],
+            follow_up_question=d.get("follow_up_question"),
+            output=(d.get("output") or "")[:SOURCE_OUTPUT_MAX] or None,
         )
         for d in docs
     ]
@@ -194,30 +197,30 @@ def answer(req: ChatRequest) -> ChatResponse:
         category, topic, confidence = None, None, 0.0
     sources = _sources(docs) if grounded else []
 
-    def handoff(text: str, reason: str) -> ChatResponse:
+    def handoff(text: str, code: str, reason: str) -> ChatResponse:
         return ChatResponse(
-            answer=text, category=category, topic=topic, confidence=confidence,
-            sources=sources, handoff_needed=True, handoff_reason=reason,
+            answer=text, category=category, topic=topic, confidence=confidence, sources=sources,
+            handoff_needed=True, handoff_code=code, handoff_reason=reason,
         )
 
     if is_contact_request(message):
-        return handoff(MSG_CONTACT, "고객이 상담사 연결을 요청함")
+        return handoff(MSG_CONTACT, "contact_request", "고객이 상담사 연결을 요청함")
     if is_action_request(message):
-        return handoff(MSG_ACTION, "실제 처리가 필요한 요청 (AI는 안내만 가능)")
+        return handoff(MSG_ACTION, "action_request", "실제 처리가 필요한 요청 (AI는 안내만 가능)")
     if search_error is not None:
-        return handoff(MSG_ERROR, f"검색 오류: {search_error.__class__.__name__}")
+        return handoff(MSG_ERROR, "ai_error", f"검색 오류: {search_error.__class__.__name__}")
     if not grounded:
-        return handoff(MSG_NO_BASIS, f"관련 상담 근거 부족 (최고 유사도 {best:.2f} < {MIN_SIMILARITY})")
+        return handoff(MSG_NO_BASIS, "no_basis", f"관련 상담 근거 부족 (최고 유사도 {best:.2f} < {MIN_SIMILARITY})")
     if confidence < MIN_CONFIDENCE:
-        return handoff(MSG_NO_BASIS, f"분야 판단 확신도 낮음 ({confidence:.2f} < {MIN_CONFIDENCE})")
+        return handoff(MSG_NO_BASIS, "low_confidence", f"분야 판단 확신도 낮음 ({confidence:.2f} < {MIN_CONFIDENCE})")
 
     try:
         text = clean_answer(_generate(message, category, docs, history))
     except Exception as e:
         log.exception("LLM 답변 생성 실패")
-        return handoff(MSG_ERROR, f"LLM 오류: {e.__class__.__name__}")
+        return handoff(MSG_ERROR, "ai_error", f"LLM 오류: {e.__class__.__name__}")
     if not text:
-        return handoff(MSG_ERROR, "LLM 이 빈 답변을 반환함")
+        return handoff(MSG_ERROR, "ai_error", "LLM 이 빈 답변을 반환함")
 
     return ChatResponse(answer=text, category=category, topic=topic, confidence=confidence, sources=sources)
 
@@ -229,7 +232,7 @@ def _mock_answer(req: ChatRequest) -> ChatResponse:
         return ChatResponse(
             answer="상담사 연결을 도와드릴게요.",
             category="은행", topic="대출문의(만기/연장/조회등)", confidence=0.9,
-            handoff_needed=True, handoff_reason="고객이 상담사 연결을 요청함",
+            handoff_needed=True, handoff_code="contact_request", handoff_reason="고객이 상담사 연결을 요청함",
         )
     return ChatResponse(
         answer=f"[MOCK] '{msg}' 에 대한 가짜 답변입니다. 실제 모델이 연결되면 근거 기반 답변으로 바뀝니다.",

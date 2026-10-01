@@ -7,7 +7,8 @@ from app.services import chat_service as cs
 
 def _doc(sim, cat="은행", topic="대출문의", question="만기 연장?"):
     return {"qa_id": "q1", "similarity": sim, "consulting_category": cat, "consulting_topic": topic,
-            "question": question, "answer": "앱에서 가능", "output": "종합 ●●원", "full_source": "전체 ●●"}
+            "question": question, "answer": "앱에서 가능", "output": "종합 ●●원", "full_source": "전체 ●●",
+            "follow_up_question": "추가로 필요한 서류는?"}
 
 
 @pytest.fixture
@@ -29,13 +30,14 @@ def test_normal_answer(real_mode, monkeypatch):
     assert not r.handoff_needed and r.answer == "답변입니다"
     assert (r.category, r.topic, r.confidence) == ("은행", "대출문의", 1.0)
     assert r.sources[0].doc_id == "q1" and len(real_mode) == 1
+    assert r.sources[0].follow_up_question == "추가로 필요한 서류는?" and r.sources[0].output == "종합 ●●원"
 
 
 @pytest.mark.parametrize("msg", ["그 아이디 삭제 좀 부탁드릴게요", "계좌 해지해 주세요", "이체 한도 올려주세요"])
 def test_action_request_hands_off_without_llm(real_mode, monkeypatch, msg):
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
     r = ask(msg)
-    assert r.handoff_needed and "실제 처리" in r.handoff_reason and real_mode == []
+    assert r.handoff_needed and r.handoff_code == "action_request" and real_mode == []
     assert r.category == "은행"  # 상담사 대기큐 분류용으로 분야는 유지
 
 
@@ -47,20 +49,21 @@ def test_info_question_is_not_action(msg):
 def test_contact_request(real_mode, monkeypatch):
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
     r = ask("상담사 연결해 주세요")
-    assert r.handoff_needed and "상담사 연결" in r.handoff_reason and real_mode == []
+    assert r.handoff_needed and r.handoff_code == "contact_request" and real_mode == []
 
 
 def test_low_similarity_hands_off_and_drops_category(real_mode, monkeypatch):
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.41)] * 5)
     r = ask("오늘 날씨 어때요?")
-    assert r.handoff_needed and r.category is None and r.confidence == 0.0 and r.sources == [] and real_mode == []
+    assert r.handoff_needed and r.handoff_code == "no_basis" and r.category is None and r.confidence == 0.0
+    assert r.sources == [] and real_mode == []
 
 
 def test_low_confidence_hands_off_but_keeps_guess(real_mode, monkeypatch):
     docs = [_doc(0.8, "은행"), _doc(0.78, "보험"), _doc(0.75, "증권"), _doc(0.7, "보험"), _doc(0.7, "증권")]
     monkeypatch.setattr(cs, "_search", lambda m: docs)
     r = ask()
-    assert r.handoff_needed and "확신도" in r.handoff_reason and r.category is not None and real_mode == []
+    assert r.handoff_needed and r.handoff_code == "low_confidence" and r.category is not None and real_mode == []
 
 
 def test_search_error_hands_off(real_mode, monkeypatch):
@@ -68,7 +71,7 @@ def test_search_error_hands_off(real_mode, monkeypatch):
         raise ConnectionError("db down")
     monkeypatch.setattr(cs, "_search", boom)
     r = ask()
-    assert r.handoff_needed and "검색 오류" in r.handoff_reason
+    assert r.handoff_needed and r.handoff_code == "ai_error" and "검색 오류" in r.handoff_reason
 
 
 def test_llm_error_hands_off(monkeypatch):
@@ -79,7 +82,7 @@ def test_llm_error_hands_off(monkeypatch):
         raise RuntimeError("ollama down")
     monkeypatch.setattr(cs, "_generate", boom)
     r = ask()
-    assert r.handoff_needed and "LLM 오류" in r.handoff_reason
+    assert r.handoff_needed and r.handoff_code == "ai_error" and "LLM 오류" in r.handoff_reason
 
 
 def test_mask():

@@ -23,6 +23,12 @@ class Source(BaseModel):
     topic: str
     score: float
     snippet: str
+    follow_up_question: Optional[str] = None   # 상담사 화면의 "예상 꼬리질문"
+    output: Optional[str] = None               # 상담사 화면의 "예상 종합 답변"
+
+
+# 이관 사유 코드: 웹이 이관 사유(통계/상담사 화면)를 구분해서 저장하는 데 쓴다. 사람이 읽는 설명은 handoff_reason.
+HandoffCode = Literal["contact_request", "action_request", "no_basis", "low_confidence", "ai_error"]
 
 
 class ChatResponse(BaseModel):
@@ -32,4 +38,5 @@ class ChatResponse(BaseModel):
     confidence: float = 0.0            # 분야 판단 확신도 (0~1)
     sources: List[Source] = []         # RAG 검색 근거
     handoff_needed: bool = False       # True면 상담사 연결 제안
+    handoff_code: Optional[HandoffCode] = None
     handoff_reason: Optional[str] = None
