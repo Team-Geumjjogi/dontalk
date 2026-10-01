@@ -18,10 +18,10 @@ dontalk/
  
 .env 예시:
     DB_HOST=localhost
-    POSTGRESQL_PORT=5432
-    POSTGRESQL_USER=...
-    POSTGRESQL_PASSWORD=...
-    POSTGRESQL_DBNAME=...
+    DB_PORT=5432
+    DB_USER=...
+    DB_PASSWORD=...
+    DB_NAME=...
     DB_SSLMODE=require          # SSL /연결 옵션 필요 시 추가 (미설정 시 기본값 prefer)
     DB_SSLNEGOTIATION=direct    # SSL /연결 옵션 필요 시 추가 (미설정 시 기본값 direct)
 """
@@ -73,10 +73,10 @@ class LoaderConfig:
     def db_config() -> dict[str, str]:
         env_keys = {
             "host": "DB_HOST",
-            "port": "POSTGRESQL_PORT",
-            "user": "POSTGRESQL_USER",
-            "password": "POSTGRESQL_PASSWORD",
-            "dbname": "POSTGRESQL_DBNAME",
+            "port": "DB_PORT",
+            "user": "DB_USER",
+            "password": "DB_PASSWORD",
+            "dbname": "DB_NAME",
         }
         config = {k: os.getenv(v) for k, v in env_keys.items()}
         missing = [env_keys[k] for k, v in config.items() if not v]
