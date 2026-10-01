@@ -1,6 +1,7 @@
 {#- 관리자 대시보드: 지표 카드 4개 + 분야별 비중 + 최근 상담. 모든 숫자는 실제 DB 집계. -#}
 {% extends "layouts/staff.html" %}
 {% from "components/badge.html" import badge %}
+{% from "components/category_badge.html" import category_badge %}
 {% from "components/card.html" import card %}
 {% from "components/empty_state.html" import empty_state %}
 {% from "components/meter.html" import meter %}
@@ -42,8 +43,8 @@
         <ul class="log-list">
           {% for c in recent_logs %}
             <li class="log-list__item">
-              <strong>{{ c.customer.name or "고객" }}</strong>
-              {{ badge(c.category or "미분류") }}
+              <a href="{{ url_for('admin.consult_detail', consult_id=c.consult_id) }}"><strong>{{ c.customer.name or "고객" }}</strong></a>
+              {{ category_badge(c.category) }}
               {{ status_badge(c) }}
               <span class="log-list__time">{{ c.updated_at|kst }}</span>
             </li>
@@ -54,5 +55,26 @@
       {% endif %}
     {% endcall %}
   </div>
+
+  {% call card(title="AI 분류 정확도") %}
+    {% if classification.total.handed_off %}
+      <p class="admin__summary">
+        AI가 분야를 판단해 상담사에게 넘긴 <strong>{{ classification.total.handed_off }}건</strong> 중
+        <strong>{{ classification.total.reassigned }}건</strong>이 다른 분야로 재배정되었어요.
+        분류 오류율 <strong>{{ classification.total.error_rate }}%</strong>
+      </p>
+      <table class="table">
+        <thead><tr><th scope="col">AI 판단 분야</th><th scope="col">이관 건수</th><th scope="col">재배정</th><th scope="col">오류율</th></tr></thead>
+        <tbody>
+          {% for r in classification.rows %}
+            <tr><td>{{ category_badge(r.category) }}</td><td>{{ r.handed_off }}건</td><td>{{ r.reassigned }}건</td><td>{{ (r.error_rate ~ "%") if r.error_rate is not none else "-" }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      {{ empty_state("집계할 이관 상담이 아직 없습니다", "상담사가 분야를 재배정하면 AI 분류 오류율이 여기에 표시됩니다.") }}
+    {% endif %}
+    <p class="admin__note">AI가 분야를 판단하지 못해 상담사가 직접 배정한 상담(미분류)은 오류율에 넣지 않고 따로 셉니다: <strong>{{ classification.unclassified }}건</strong></p>
+  {% endcall %}
 </div>
 {% endblock %}

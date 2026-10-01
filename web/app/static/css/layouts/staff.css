@@ -5,3 +5,16 @@
 .staff-main { padding: var(--space-6); }
 .staff-main--full { padding: 0; }   /* 상담사 화면처럼 영역을 꽉 채우는 경우 */
 .staff-title { margin-bottom: var(--space-5); font-size: var(--text-xl); font-weight: var(--weight-bold); }
+
+/* 관리자 상단 메뉴 */
+.staff-nav { display: flex; gap: var(--space-1); margin-right: var(--space-2); }
+.staff-nav__link {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+.staff-nav__link:hover { background: var(--color-bg-app); }
+.staff-nav__link--active { background: var(--color-accent-soft); color: var(--color-text); }

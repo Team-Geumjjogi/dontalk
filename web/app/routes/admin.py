@@ -3,16 +3,17 @@
 지금은 테스트 데이터가 적어서 수치가 작게 나오는 게 정상이다 — 로직 자체는 실제 서비스에서도
 그대로 쓸 수 있게 만들었고, 데모 때 그럴듯하게 보이려면 시드 스크립트로 테스트 데이터를 채우면 된다.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, render_template
+from flask import Blueprint, abort, render_template, request
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.authz import role_required
 from app.extensions import db
-from app.models import Consult, ConsultStatus, Employee, EmployeeRole, QueueType, Satisfaction
+from app.models import CATEGORIES, Consult, ConsultStatus, ConsultTransfer, Employee, EmployeeRole, QueueType, Satisfaction
 from app.services.business_hours import KST
+from app.services.classification_stats import classification_stats
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -82,4 +83,76 @@ def dashboard():
         category_counts=category_counts,
         category_total=category_total,
         recent_logs=recent_logs,
+        classification=classification_stats(),
     )
+
+
+# ---------- 상담 이력 ----------
+PAGE_SIZE = 20
+STATUS_FILTERS = {  # 화면 필터 값 -> 실제 상태들
+    "chatting": (ConsultStatus.chatting,),
+    "ended": (ConsultStatus.ended,),
+    "waiting": (ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day),
+    "completed": (ConsultStatus.completed,),
+}
+UNCLASSIFIED_FILTER = "unclassified"
+
+
+def _kst_day_start(day: str | None) -> datetime | None:
+    """'2026-10-01' 같은 날짜 문자열을 그날 0시(한국 시간)로. 형식이 잘못되면 None."""
+    try:
+        return datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=KST) if day else None
+    except ValueError:
+        return None
+
+
+@bp.route("/consults")
+@role_required(EmployeeRole.admin)
+def consults():
+    """상담 이력: 분야/상태/상담사/기간으로 걸러서 본다. 완료한 상담의 채팅 기록은 상세에서 확인한다."""
+    category = request.args.get("category", "all")
+    status = request.args.get("status", "all")
+    agent_id = request.args.get("agent", type=int)
+    date_from, date_to = request.args.get("date_from", ""), request.args.get("date_to", "")
+
+    query = (
+        db.select(Consult)
+        .options(joinedload(Consult.customer), joinedload(Consult.employee), selectinload(Consult.transfers), selectinload(Consult.messages))
+        .order_by(Consult.created_at.desc(), Consult.consult_id.desc())
+    )
+    if category in CATEGORIES:
+        query = query.where(Consult.category == category)
+    elif category == UNCLASSIFIED_FILTER:
+        query = query.where(Consult.category.is_(None))
+    if status in STATUS_FILTERS:
+        query = query.where(Consult.status.in_(STATUS_FILTERS[status]))
+    if agent_id:
+        query = query.where(Consult.employee_id == agent_id)
+    if start := _kst_day_start(date_from):
+        query = query.where(Consult.created_at >= start)
+    if end := _kst_day_start(date_to):
+        query = query.where(Consult.created_at < end + timedelta(days=1))  # 종료일 당일까지 포함
+
+    filters = {"category": category, "status": status, "agent": agent_id, "date_from": date_from, "date_to": date_to}
+    pagination = db.paginate(query, page=request.args.get("page", 1, type=int), per_page=PAGE_SIZE, error_out=False)
+    agents = db.session.scalars(db.select(Employee).where(Employee.role == EmployeeRole.agent).order_by(Employee.name)).all()
+    return render_template(
+        "admin_consults.html",
+        pagination=pagination,
+        agent_options=[("", "전체")] + [(a.employee_id, f"{a.name} ({a.department})") for a in agents],
+        filters=filters,
+        params={key: value for key, value in filters.items() if value not in (None, "", "all")},  # 페이지 이동 링크에 유지할 조건
+    )
+
+
+@bp.route("/consults/<int:consult_id>")
+@role_required(EmployeeRole.admin)
+def consult_detail(consult_id):
+    consult = db.session.get(
+        Consult, consult_id,
+        options=[joinedload(Consult.customer), joinedload(Consult.employee), selectinload(Consult.messages),
+                 selectinload(Consult.transfers).joinedload(ConsultTransfer.employee)],
+    )
+    if consult is None:
+        abort(404)
+    return render_template("admin_consult_detail.html", consult=consult)

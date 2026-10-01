@@ -17,7 +17,12 @@
       <strong>{{ current_user.name }}</strong>님
       {%- if current_user.department %} · {{ current_user.department }} 담당{% endif %}
     </span>
-    {% block header_nav %}{% endblock %}
+    {% if current_user.role.value == "admin" %}
+      <nav class="staff-nav" aria-label="관리자 메뉴">
+        <a class="staff-nav__link{{ ' staff-nav__link--active' if request.endpoint == 'admin.dashboard' }}" href="{{ url_for('admin.dashboard') }}">대시보드</a>
+        <a class="staff-nav__link{{ ' staff-nav__link--active' if request.endpoint in ('admin.consults', 'admin.consult_detail') }}" href="{{ url_for('admin.consults') }}">상담 이력</a>
+      </nav>
+    {% endif %}
     {{ button("로그아웃", href=url_for("auth.logout"), variant="ghost", size="sm") }}
   {% endcall %}
   {{ flash_messages(fluid=True) }}
