@@ -1,103 +1,96 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>돈톡 — 상담사</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='agent.css') }}">
-</head>
-<body>
-  <header class="topbar">
-    <div>
-      <strong>돈톡 상담사</strong>
-      <span class="sub">{{ current_user.name }}님 {% if current_user.department %}({{ current_user.department }} 담당){% endif %}</span>
-    </div>
-    <a href="{{ url_for('auth.logout') }}">로그아웃</a>
-  </header>
+{#- 상담사 화면: 왼쪽 내 분야 대기 큐, 오른쪽 상담 상세 + 상담 메모. 상담사는 고객과 대화하지 않고 메모만 남긴다. -#}
+{% extends "layouts/staff.html" %}
+{% from "components/badge.html" import badge %}
+{% from "components/button.html" import button %}
+{% from "components/card.html" import card %}
+{% from "components/conversation.html" import conversation %}
+{% from "components/empty_state.html" import empty_state %}
+{% from "components/field.html" import field %}
+{% from "components/key_value.html" import key_value %}
+{% from "components/source_list.html" import source_list %}
+{% from "components/status_badge.html" import status_badge %}
 
-  <div class="layout">
-    <!-- 대기큐 -->
-    <aside class="queue-panel">
-      <div class="queue-header">
-        <strong>상담사 대기 큐</strong>
-        <span class="count-badge">대기 {{ waiting_consults|length }}건</span>
-      </div>
-      <nav class="tabs">
-        {% for key, label in [("all", "전체"), ("은행", "은행"), ("보험", "보험"), ("증권", "증권"), ("reserved", "예약상담")] %}
-          <a href="{{ url_for('agent.queue', category=key) }}" class="{{ 'active' if category == key else '' }}">{{ label }}</a>
-        {% endfor %}
-      </nav>
+{% block title %}돈톡 — 상담사{% endblock %}
 
-      {% if not waiting_consults %}
-        <p class="empty">대기 중인 상담이 없습니다.</p>
-      {% endif %}
+{% block page_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/agent.css') }}">
+{% endblock %}
 
-      {% for c in waiting_consults %}
-        {% set first_msg = c.messages|selectattr("sender.value", "equalto", "customer")|first %}
-        <a href="{{ url_for('agent.queue', category=category, consult_id=c.consult_id) }}"
-           class="queue-item {{ 'selected' if selected and selected.consult_id == c.consult_id else '' }}">
-          <div class="queue-item-top">
-            <span class="name">{{ c.customer.name or '고객' }}</span>
-            <span class="status-badge {{ c.status.value }}">{{ '예약' if c.status.value == 'waiting_next_day' else '대기중' }}</span>
-          </div>
-          <p class="preview">{{ (first_msg.content if first_msg else '')[:40] }}</p>
-          <span class="cat-tag">{{ c.category or '분류중' }}</span>
-        </a>
+{% block main_class %}staff-main--full{% endblock %}
+
+{% block content %}
+<div class="agent-layout">
+  <aside class="agent-queue" aria-label="대기 큐">
+    <header class="agent-queue__header">
+      <h1 class="agent-queue__title">{{ current_user.department }} 대기 큐</h1>
+      {{ badge("대기 " ~ queue_items|length ~ "건", tone="warning") }}
+    </header>
+
+    {% if not queue_items %}
+      {{ empty_state("대기 중인 상담이 없습니다", "새 상담이 접수되면 여기에 표시됩니다.") }}
+    {% endif %}
+
+    <ul class="queue-list">
+      {% for item in queue_items %}
+        {% set c = item.consult %}
+        {% set is_selected = selected and selected.consult_id == c.consult_id %}
+        <li>
+          <a class="queue-item{{ ' queue-item--selected' if is_selected }}" href="{{ url_for('agent.queue', consult_id=c.consult_id) }}"
+             {%- if is_selected %} aria-current="true"{% endif %}>
+            <span class="queue-item__top">
+              <strong>{{ c.customer.name or "고객" }}</strong>
+              {{ status_badge(c) }}
+            </span>
+            <span class="queue-item__preview">{{ item.preview }}</span>
+            <span class="queue-item__bottom">
+              {{ badge(c.category or "미분류") }}
+              <span class="queue-item__time">{{ c.handoff_at|kst }}</span>
+            </span>
+          </a>
+        </li>
       {% endfor %}
-    </aside>
+    </ul>
+  </aside>
 
-    <!-- 상담 상세 -->
-    <main class="detail-panel">
-      {% if not selected %}
-        <div class="empty-detail">
-          <p>상담 건을 선택해주세요</p>
-          <p class="sub">왼쪽 대기 큐에서 고객의 문의를 선택하시면 원본 문의, AI 분석 결과,
-             AI 답변 내역을 확인하고 상담을 진행할 수 있습니다.</p>
-        </div>
-      {% else %}
-        {% set first_msg = selected.messages|selectattr("sender.value", "equalto", "customer")|first %}
-        <div class="detail-header">
-          <strong>{{ selected.customer.name or '고객' }} 상세 문의</strong>
-          <span class="cat-tag">{{ selected.category or '분류중' }}</span>
-        </div>
+  <section class="agent-detail" aria-label="상담 상세">
+    {% if not selected %}
+      {{ empty_state("상담 건을 선택해 주세요", "왼쪽 대기 큐에서 고객 문의를 선택하면 원본 문의, AI 분석 결과, 대화 내역을 확인하고 상담을 정리할 수 있습니다.") }}
+    {% else %}
+      {% set c = selected %}
+      <header class="agent-detail__header">
+        <h2 class="agent-detail__title">{{ c.customer.name or "고객" }} 상세 문의</h2>
+        {{ badge(c.category or "미분류") }}
+        {{ status_badge(c) }}
+      </header>
 
-        <div class="cards">
-          <div class="card">
-            <h4>고객 원본 문의</h4>
-            <p>{{ first_msg.content if first_msg else '(없음)' }}</p>
-          </div>
-          <div class="card highlight">
-            <h4>AI 분석 결과</h4>
-            <p>분류 분야: {{ selected.category or '-' }}</p>
-            <p>주제: {{ selected.topic or '-' }}</p>
-            <p>신뢰도: {{ (selected.confidence * 100)|round|int if selected.confidence else '-' }}%</p>
-            <p>이관 사유: {{ '고객 불만족' if selected.handoff_reason and selected.handoff_reason.value == 'user_dissatisfied' else 'AI 답변 불가' if selected.handoff_reason else '-' }}</p>
-          </div>
-        </div>
+      <div class="agent-detail__grid">
+        {% call card(title="고객 원본 문의") %}{{ selected_question or "(없음)" }}{% endcall %}
+        {% call card(title="AI 분석 결과", tone="accent") %}
+          {{ key_value([
+            ("분류 분야", c.category or "미분류"),
+            ("주제", c.topic),
+            ("신뢰도", (c.confidence * 100)|round|int ~ "%" if c.confidence is not none else None),
+            ("이관 사유", c.handoff_reason.label if c.handoff_reason else None),
+            ("상세", c.handoff_detail),
+          ]) }}
+        {% endcall %}
+      </div>
 
-        <div class="card">
-          <h4>대화 내역</h4>
-          <div class="history">
-            {% for m in selected.messages %}
-              <div class="hist-row {{ m.sender.value }}">
-                <span class="hist-sender">{{ {"customer": "고객", "ai": "AI", "agent": "상담사"}[m.sender.value] }}</span>
-                <span class="hist-content">{{ m.content }}</span>
-              </div>
-            {% endfor %}
-          </div>
-          <!-- TODO(AI 연결 후): RAG 검색 결과의 꼬리질문/예상답변을 여기 같이 보여준다 -->
-        </div>
+      {% call card(title="대화 내역") %}{{ conversation(c.messages) }}{% endcall %}
 
-        <form method="post" action="{{ url_for('agent.reply', consult_id=selected.consult_id) }}" class="reply-form">
-          <h4>상담 진행 및 전문 답변 입력</h4>
-          <textarea name="content" rows="4" placeholder="고객에게 전달할 답변을 입력하세요"></textarea>
-          <div class="reply-actions">
-            <button type="submit" name="action" value="save" class="btn-secondary">임시 저장</button>
-            <button type="submit" name="action" value="complete" class="btn-primary">상담 완료 및 종료</button>
-          </div>
-        </form>
+      {% set ai_sources = c.messages|selectattr("sources")|map(attribute="sources")|list %}
+      {% if ai_sources %}
+        {% call card(title="AI가 참고한 상담 사례") %}{{ source_list(ai_sources[-1]) }}{% endcall %}
       {% endif %}
-    </main>
-  </div>
-</body>
-</html>
+
+      <form class="card stack" method="post" action="{{ url_for('agent.complete', consult_id=c.consult_id) }}">
+        <h3 class="card__title">상담 정리</h3>
+        {{ field("summary", "상담 메모 (정리·요약)", type="textarea", rows=5, required=True,
+                 placeholder="상담 내용을 짧게 정리해 주세요.",
+                 hint="저장하면 상담이 종료되고 대기 큐에서 사라집니다. 고객에게는 전달되지 않습니다.") }}
+        <div>{{ button("저장하고 상담 종료", type="submit") }}</div>
+      </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

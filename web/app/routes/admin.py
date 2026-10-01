@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, render_template
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.authz import role_required
 from app.extensions import db
@@ -14,6 +15,11 @@ from app.models import Consult, ConsultStatus, Employee, EmployeeRole, QueueType
 from app.services.business_hours import KST
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """DB에서 timezone 정보 없이 나온 시각(sqlite 등)은 UTC 로 간주한다."""
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
 @bp.route("/")
@@ -24,10 +30,14 @@ def dashboard():
 
     today_consults = Consult.query.filter(Consult.created_at >= today_start)
     total_today = today_consults.count()
-    ai_only_today = today_consults.filter(Consult.employee_id.is_(None), Consult.status == ConsultStatus.completed).count()
+    # AI 단독 해결 = 상담사 연결 없이 고객이 종료했고(ended), 불만족이 아닌 건
+    ai_only_today = today_consults.filter(
+        Consult.status == ConsultStatus.ended,
+        db.or_(Consult.satisfaction.is_(None), Consult.satisfaction == Satisfaction.satisfied),
+    ).count()
     ai_only_rate = round(ai_only_today / total_today * 100, 1) if total_today else 0.0
 
-    handed_off = Consult.query.filter(Consult.employee_id.isnot(None)).count()
+    handed_off = Consult.query.filter(Consult.handoff_at.isnot(None)).count()
     realtime_count = Consult.query.filter(Consult.queue_type == QueueType.realtime).count()
     reserved_count = Consult.query.filter(Consult.queue_type == QueueType.next_day).count()
     handoff_rate = round(handed_off / total_today * 100, 1) if total_today else 0.0
@@ -36,24 +46,14 @@ def dashboard():
     satisfied_total = Consult.query.filter(Consult.satisfaction == Satisfaction.satisfied).count()
     satisfaction_rate = round(satisfied_total / feedback_total * 100, 1) if feedback_total else None
 
-    waiting_now = Consult.query.filter(
-        Consult.status.in_((ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day)),
-        Consult.employee_id.is_(None),
-    ).count()
+    waiting_statuses = (ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day)
+    waiting_now = Consult.query.filter(Consult.status.in_(waiting_statuses)).count()
     agent_count = Employee.query.filter(Employee.role == EmployeeRole.agent).count()
 
-    # 대기 중인 건들의 평균 대기 시간 (분) — 지금까지 기다린 시간의 평균
-    waiting_rows = Consult.query.filter(
-        Consult.status.in_((ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day)),
-        Consult.employee_id.is_(None),
-    ).all()
-    if waiting_rows:
-        now_utc = datetime.now(timezone.utc)
-        avg_wait_minutes = round(
-            sum((now_utc - c.created_at).total_seconds() for c in waiting_rows) / len(waiting_rows) / 60, 1
-        )
-    else:
-        avg_wait_minutes = 0.0
+    # 대기 중인 건들의 평균 대기 시간 (분) — 상담사 연결을 접수한 시각부터 지금까지
+    waiting_since = [c.handoff_at for c in Consult.query.filter(Consult.status.in_(waiting_statuses)).all() if c.handoff_at]
+    now_utc = datetime.now(timezone.utc)
+    avg_wait_minutes = round(sum((now_utc - _as_utc(t)).total_seconds() for t in waiting_since) / len(waiting_since) / 60, 1) if waiting_since else 0.0
 
     category_counts = (
         db.session.query(Consult.category, func.count(Consult.consult_id))
@@ -63,7 +63,7 @@ def dashboard():
     category_counts = [(cat or "분류중", n) for cat, n in category_counts]
     category_total = sum(n for _, n in category_counts) or 1
 
-    recent_logs = Consult.query.order_by(Consult.updated_at.desc()).limit(10).all()
+    recent_logs = Consult.query.options(joinedload(Consult.customer)).order_by(Consult.updated_at.desc()).limit(10).all()
 
     return render_template(
         "admin_dashboard.html",

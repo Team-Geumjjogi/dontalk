@@ -10,6 +10,7 @@ from flask import Flask
 from sqlalchemy.engine import URL
 
 from app.extensions import db, login_manager
+from app.services.business_hours import format_kst
 
 load_dotenv()
 
@@ -43,6 +44,8 @@ def create_app(database_uri: str | None = None) -> Flask:
     app.config["SQLALCHEMY_DATABASE_URI"] = database_uri or _database_uri()
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}  # 원격 DB 연결이 끊겨 있으면 자동으로 다시 연결
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    app.jinja_env.filters["kst"] = format_kst  # {{ consult.created_at|kst }}
 
     db.init_app(app)
 

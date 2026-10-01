@@ -1,71 +1,82 @@
-"""상담사 화면: 대기큐 + 상담 상세.
+"""상담사 화면: 내 분야(department)로 분류된 대기 건 + 상담 상세.
 
-흐름 (플로우차트 "상담원"): 로그인 -> 대기큐 -> 상담 건 선택 -> 고객 문의 확인 -> 상담 진행/답변 -> 상담 완료
-"임시저장"은 답변만 남기고 큐에 남겨두고(진행중), "상담완료 및 종료"는 답변을 남기고 상담을 끝낸다.
+흐름: 로그인 -> 내 분야 대기큐 -> 상담 건 선택 -> 고객 문의/AI 분석/대화 내역 확인 -> 상담 메모 입력 -> 저장하면 상담 종료
+상담사는 고객과 대화하지 않는다(고객에게 답변이 전달되지 않음). 마지막 단계는 상담 정리/메모(consult.summary) 저장이다.
+분야 판단(AI)이 안 된 건(category 없음)은 "미분류"로 모든 상담사의 큐에 보인다.
 """
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from datetime import datetime, timezone
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.authz import role_required
 from app.extensions import db
-from app.models import Consult, ConsultStatus, EmployeeRole, Message, Sender
+from app.models import Consult, ConsultStatus, EmployeeRole, Sender
 
 bp = Blueprint("agent", __name__, url_prefix="/agent")
 
 WAITING_STATUSES = (ConsultStatus.waiting_realtime, ConsultStatus.waiting_next_day)
 
 
-@bp.route("/")
-@role_required(EmployeeRole.agent)
-def queue():
-    category = request.args.get("category", "all")
-    selected_id = request.args.get("consult_id", type=int)
-
-    query = Consult.query.filter(Consult.status.in_(WAITING_STATUSES), Consult.employee_id.is_(None))
-    if category == "reserved":
-        query = query.filter(Consult.status == ConsultStatus.waiting_next_day)
-    elif category in ("은행", "보험", "증권"):
-        query = query.filter(Consult.category == category)
-    waiting_consults = query.order_by(Consult.created_at).all()
-
-    selected = None
-    if selected_id:
-        selected = db.session.get(Consult, selected_id)
-        # 이미 다른 상담사가 가져갔거나 없는 건이면 선택 해제
-        if selected and selected.employee_id not in (None, current_user.employee_id):
-            selected = None
-
-    return render_template(
-        "agent_queue.html",
-        waiting_consults=waiting_consults,
-        selected=selected,
-        category=category,
+def _queue_filter():
+    """내 분야로 분류된 대기 건 + 아직 분야가 없는 건."""
+    return db.and_(
+        Consult.status.in_(WAITING_STATUSES),
+        db.or_(Consult.category == current_user.department, Consult.category.is_(None)),
     )
 
 
-@bp.route("/consult/<int:consult_id>/reply", methods=["POST"])
+def _first_question(consult: Consult) -> str:
+    return next((m.content for m in consult.messages if m.sender == Sender.customer), "")
+
+
+@bp.route("/")
 @role_required(EmployeeRole.agent)
-def reply(consult_id):
+def queue():
+    # 대기 건마다 고객/메시지를 따로 조회하지 않도록(N+1) 한 번에 같이 가져온다. DB가 원격이라 쿼리 수가 곧 응답 시간이다.
+    waiting = db.session.scalars(
+        db.select(Consult)
+        .where(_queue_filter())
+        .options(joinedload(Consult.customer), selectinload(Consult.messages))
+        .order_by(Consult.handoff_at, Consult.consult_id)
+    ).all()
+
+    selected = None
+    selected_id = request.args.get("consult_id", type=int)
+    if selected_id:
+        selected = next((c for c in waiting if c.consult_id == selected_id), None)  # 큐에 있는 건만 열 수 있다
+
+    return render_template(
+        "agent_queue.html",
+        queue_items=[{"consult": c, "preview": _first_question(c)} for c in waiting],
+        selected=selected,
+        selected_question=_first_question(selected) if selected else "",
+    )
+
+
+@bp.route("/consult/<int:consult_id>/complete", methods=["POST"])
+@role_required(EmployeeRole.agent)
+def complete(consult_id):
     consult = db.session.get(Consult, consult_id)
     if consult is None:
         abort(404)
-    if consult.employee_id not in (None, current_user.employee_id):
-        abort(403)  # 이미 다른 상담사가 처리 중인 건
+    if consult.status not in WAITING_STATUSES:
+        flash("이미 처리된 상담입니다.", "info")
+        return redirect(url_for("agent.queue"))
+    if consult.category not in (current_user.department, None):
+        abort(403)  # 다른 분야 상담사의 건
 
-    content = (request.form.get("content") or "").strip()
-    action = request.form.get("action")  # "save" 또는 "complete"
+    summary = (request.form.get("summary") or "").strip()
+    if not summary:
+        flash("상담 메모를 입력해 주세요.", "danger")
+        return redirect(url_for("agent.queue", consult_id=consult_id))
 
-    consult.employee_id = current_user.employee_id  # 이 상담사가 담당(claim)
-    if content:
-        db.session.add(Message(consult_id=consult.consult_id, sender=Sender.agent, content=content))
-
-    if action == "complete":
-        consult.status = ConsultStatus.completed
-    else:
-        consult.status = ConsultStatus.in_progress
-
+    consult.summary = summary
+    consult.employee_id = current_user.employee_id
+    consult.status = ConsultStatus.completed
+    consult.closed_at = datetime.now(timezone.utc)
     db.session.commit()
 
-    if action == "complete":
-        return redirect(url_for("agent.queue"))
-    return redirect(url_for("agent.queue", consult_id=consult.consult_id))
+    flash("상담을 종료했습니다.", "success")
+    return redirect(url_for("agent.queue"))
