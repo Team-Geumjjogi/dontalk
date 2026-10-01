@@ -26,7 +26,14 @@ dependencies = [
     "sentence-transformers>=6.1.0",
     "tqdm>=4.70.1",
     "uvicorn[standard]>=0.29",
+    "peft>=0.21.1",
+    "torch>=2.6",
+    "transformers>=4.56,<5.9",
+    "accelerate>=1.0,<2",
 ]
+
+[project.optional-dependencies]
+cuda = ["bitsandbytes>=0.43; sys_platform == 'linux' or sys_platform == 'win32'"]
 
 [tool.uv]
 package = false

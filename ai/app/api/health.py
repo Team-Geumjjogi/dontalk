@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.core import config
+from app.llm import config
 
 router = APIRouter()
 
