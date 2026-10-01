@@ -4,6 +4,7 @@
     uvicorn app.main:app --reload --port 8000
 확인:  http://localhost:8000/health   /   http://localhost:8000/docs
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,6 +12,8 @@ from fastapi import FastAPI
 from app.api import chat, health
 from app.core import config
 from app.services import chat_service
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")  # 요청별 소요 시간 로그가 터미널에 보이게
 
 
 @asynccontextmanager

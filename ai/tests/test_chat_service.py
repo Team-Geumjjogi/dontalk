@@ -52,9 +52,18 @@ def test_contact_request(real_mode, monkeypatch):
     assert r.handoff_needed and r.handoff_code == "contact_request" and real_mode == []
 
 
-def test_low_similarity_hands_off_and_drops_category(real_mode, monkeypatch):
+def test_out_of_scope_gets_guidance_without_handoff(real_mode, monkeypatch):
+    """날씨/잡담처럼 금융과 무관한 질문(유사도가 매우 낮음)은 상담사에게 넘기지 않고 안내만 한다."""
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.41)] * 5)
     r = ask("오늘 날씨 어때요?")
+    assert not r.handoff_needed and r.answer == cs.MSG_OUT_OF_SCOPE and "상담사 연결" in r.answer
+    assert r.category is None and r.sources == [] and real_mode == []
+
+
+def test_weak_basis_hands_off_and_drops_category(real_mode, monkeypatch):
+    """금융과 관련은 있어 보이지만 근거가 약한 질문(0.45~0.55)은 상담사에게 넘긴다."""
+    monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.50)] * 5)
+    r = ask("HTS 에서 피보나치 도구는 어디 있나요?")
     assert r.handoff_needed and r.handoff_code == "no_basis" and r.category is None and r.confidence == 0.0
     assert r.sources == [] and real_mode == []
 
@@ -154,3 +163,108 @@ def test_history_is_trimmed(real_mode, monkeypatch):
     passed = real_mode[0][3]
     assert len(passed) == cs.MAX_HISTORY_TURNS and all(len(t["content"]) <= cs.MAX_TURN_CHARS for t in passed)
     assert passed[-1]["content"].startswith("발화9")
+
+
+# --- 답변 길이 제한 ---
+def test_limit_answer_keeps_short_answers_untouched():
+    assert cs.limit_answer("짧은 답변입니다.", 100) == "짧은 답변입니다."
+
+
+def test_limit_answer_cuts_at_sentence_boundary_and_adds_note():
+    text = "첫 번째 문장입니다. 두 번째 문장입니다. 세 번째 문장입니다. 네 번째 문장입니다."
+    limited = cs.limit_answer(text, 30)
+    assert limited == "첫 번째 문장입니다. 두 번째 문장입니다.\n" + cs.MSG_TRUNCATED   # 문장 중간에서 끊기지 않는다
+
+
+def test_limit_answer_keeps_line_breaks_and_stops_at_budget():
+    text = "1. 서류를 준비합니다.\n2. 앱에서 신청합니다.\n3. 심사 결과를 기다립니다.\n4. 문자로 안내받습니다."
+    limited = cs.limit_answer(text, 30)
+    assert limited.startswith("1. 서류를 준비합니다.\n2. 앱에서 신청합니다.") and "3." not in limited and limited.endswith(cs.MSG_TRUNCATED)
+
+
+def test_limit_answer_hard_cuts_a_single_endless_sentence():
+    limited = cs.limit_answer("가" * 200, 50)
+    assert limited.startswith("가" * 50 + "…") and limited.endswith(cs.MSG_TRUNCATED)
+
+
+def test_long_llm_answer_is_limited_in_response(monkeypatch):
+    monkeypatch.setattr(config, "AI_MOCK_MODE", False)
+    monkeypatch.setattr(cs, "_search", lambda q: [_doc(0.8)] * 5)
+    monkeypatch.setattr(cs, "_generate", lambda m, c, d, h: "안내 문장입니다. " * 100)
+    answer = ask().answer
+    assert len(answer) <= cs.ANSWER_MAX_CHARS + len(cs.MSG_TRUNCATED) + 2 and answer.endswith(cs.MSG_TRUNCATED)
+
+
+# --- 상담사 연결/처리 요청 규칙 ---
+@pytest.mark.parametrize("msg", ["상담사 연결해 주세요", "상담원이랑 통화하고 싶어요", "직원 바꿔주세요", "사람이랑 얘기하고 싶어요", "담당자와 전화 연결 부탁드립니다"])
+def test_contact_requests_detected(msg):
+    assert cs.is_contact_request(msg)
+
+
+@pytest.mark.parametrize("msg", ["직원이 친절했어요", "보험 가입 조건이 궁금합니다", "사람들이 많이 가입하나요"])
+def test_non_contact_messages_not_detected(msg):
+    assert not cs.is_contact_request(msg)
+
+
+@pytest.mark.parametrize("msg", ["500만원 송금해 주세요", "자동이체 취소해주세요", "비밀번호 변경해 주세요", "카드 재발급 부탁드려요"])
+def test_more_action_requests_detected(msg):
+    assert cs.is_action_request(msg)
+
+
+@pytest.mark.parametrize("msg", ["해지하면 수수료가 있나요", "계좌를 해지하고 싶어요", "카드 재발급 절차를 설명해 주세요"])
+def test_more_info_questions_not_action(msg):
+    assert not cs.is_action_request(msg)
+
+
+def test_answer_logs_timings(real_mode, monkeypatch, caplog):
+    monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
+    with caplog.at_level("INFO", logger="app.chat"):
+        ask()
+    assert any("chat 답변" in r.message and "검색" in r.message and "LLM" in r.message for r in caplog.records)
+
+
+# --- 후속 질문 검색: 직전 질문과 무관한 짧은 업무 밖 질문은 합치지 않는다 ---
+def _record_searches(monkeypatch, similarity_by_query):
+    queries = []
+
+    def fake_search(q):
+        queries.append(q)
+        return [_doc(similarity_by_query(q))] * 5
+
+    monkeypatch.setattr(cs, "_search", fake_search)
+    return queries
+
+
+PREV = [{"role": "user", "content": "대출 만기 연장하고 싶어요"}, {"role": "assistant", "content": "앱에서 가능해요."}]
+
+
+def test_find_docs_without_history_searches_once(monkeypatch):
+    queries = _record_searches(monkeypatch, lambda q: 0.8)
+    cs.find_docs("수수료는요?", [])
+    assert queries == ["수수료는요?"]
+
+
+def test_find_docs_with_referent_always_glues_without_extra_search(monkeypatch):
+    queries = _record_searches(monkeypatch, lambda q: 0.3 if q == "그럼 수수료는요?" else 0.85)
+    docs = cs.find_docs("그럼 수수료는요?", PREV)
+    assert queries == ["대출 만기 연장하고 싶어요 그럼 수수료는요?"] and docs[0]["similarity"] == 0.85
+
+
+def test_find_docs_short_real_follow_up_is_glued_when_standalone_is_financial(monkeypatch):
+    queries = _record_searches(monkeypatch, lambda q: 0.65 if q == "수수료는요?" else 0.85)
+    docs = cs.find_docs("수수료는요?", PREV)
+    assert queries == ["수수료는요?", "대출 만기 연장하고 싶어요 수수료는요?"] and docs[0]["similarity"] == 0.85
+
+
+def test_find_docs_short_off_topic_message_is_not_glued(monkeypatch):
+    queries = _record_searches(monkeypatch, lambda q: 0.41 if q == "오늘 날씨 어때요?" else 0.80)
+    docs = cs.find_docs("오늘 날씨 어때요?", PREV)
+    assert queries == ["오늘 날씨 어때요?"] and docs[0]["similarity"] == 0.41     # 단독 결과가 그대로 쓰여 업무 밖으로 판정된다
+
+
+def test_off_topic_after_finance_question_gets_guidance(monkeypatch):
+    monkeypatch.setattr(config, "AI_MOCK_MODE", False)
+    _record_searches(monkeypatch, lambda q: 0.41 if q == "오늘 날씨 어때요?" else 0.80)
+    monkeypatch.setattr(cs, "_generate", lambda *a: pytest.fail("LLM 을 부르면 안 됨"))
+    r = ask("오늘 날씨 어때요?", history=HIST)
+    assert not r.handoff_needed and r.answer == cs.MSG_OUT_OF_SCOPE and r.category is None
