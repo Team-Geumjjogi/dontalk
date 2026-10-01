@@ -37,8 +37,10 @@ print(answer("은행", "대출 만기를 연장하고 싶어요.", max_new_token
 모델은 프로세스마다 한 벌씩 로드하므로 시작은 워커 1개로 하세요.
 메모리 부족이나 로딩 오류는 숨기거나 다른 장치로 재시도하지 않고 호출자에게 전달합니다.
 
-현재 `/chat`의 실제 RAG/LLM 연결은 별도 미구현 상태입니다. 위 예제는 모델을 직접 호출하며,
-`AI_MOCK_MODE=false` 설정만으로 실제 채팅 API가 완성되지는 않습니다.
+`/chat` 은 `app/services/chat_service.py` 에서 공용 DB 검색(RAG) → 분야 판단 → LLM 답변 → 이관 판단으로 연결되어 있습니다.
+LLM 호출은 `.env` 의 `LLM_BACKEND` 로 고릅니다: `ollama`(기본, 로컬 개발용 base 모델) 또는 `transformers`
+(이 문서의 `model.answer`, GPU 서버에서 분야별 어댑터 사용). 위 예제는 모델을 직접 호출하는 방법입니다.
+실제 채팅 API 는 `AI_MOCK_MODE=false` 로 실행합니다.
 
 검증: `cd ai` 후 `uv run --locked python -m pytest tests -q`.
 장치별 로딩 설정은 모의 테스트로, CPU 생성은 소형 로컬 모델과 실제 PyTorch/PEFT로 확인합니다.

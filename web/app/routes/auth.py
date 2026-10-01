@@ -31,6 +31,3 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("auth.login"))
-
-
-# 상담사 화면은 app/routes/agent.py, 관리자 화면은 app/routes/admin.py 로 옮김 (5, 6단계).
