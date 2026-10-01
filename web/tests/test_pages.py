@@ -54,3 +54,18 @@ def test_alert_macro_uses_role_by_tone(app):
 def test_card_and_badge_macros(app):
     html = render(app, '{% from "components/card.html" import card %}{% from "components/badge.html" import badge %}{% call card(title="제목") %}내용{% endcall %}{{ badge("대기", tone="warning") }}')
     assert '<h3 class="card__title">제목</h3>' in html and "내용" in html and 'badge badge--warning' in html
+
+
+def test_postgres_engine_options_survive_dropped_connections():
+    from app import _engine_options
+
+    options = _engine_options()
+    args = options["connect_args"]
+    assert options["pool_pre_ping"] and options["pool_recycle"] <= 600
+    assert args["keepalives"] == 1 and args["connect_timeout"] > 0 and "statement_timeout" in args["options"]
+
+
+def test_web_to_ai_timeout_is_longer_than_ai_internal_budget():
+    from app.services import ai_client
+
+    assert ai_client.AI_TIMEOUT_SECONDS == 70   # 브라우저 90초 > 웹→AI 70초 > AI(검색 22초 + LLM 40초)

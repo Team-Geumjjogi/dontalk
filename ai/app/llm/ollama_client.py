@@ -4,7 +4,7 @@ model.py(HF transformers + 분야별 LoRA)와는 독립된 모듈이라 서로 �
 설정은 .env 에서 읽으며, 안 적어도 기본값(로컬 Ollama + exaone3.5:2.4b)으로 동작합니다.
   OLLAMA_HOST        기본 http://localhost:11434  (서버로 옮길 때 이 주소만 변경)
   OLLAMA_MODEL       기본 exaone3.5:2.4b
-  OLLAMA_TIMEOUT     기본 50초 (web/ai_client 의 60초보다 짧게)
+  OLLAMA_TIMEOUT     기본 40초 (타임아웃 계층: 브라우저 90초 > 웹→AI 70초 > AI 안의 검색 최대 ≈22초 + LLM 40초)
   LLM_TEMPERATURE / LLM_MAX_TOKENS / LLM_NUM_CTX
 """
 import os
@@ -19,7 +19,7 @@ load_dotenv()
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "exaone3.5:2.4b")
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "50"))
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "40"))
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "400"))
 LLM_NUM_CTX = int(os.getenv("LLM_NUM_CTX", "8192"))  # Ollama 기본 4096 은 RAG 문서 여러 개면 모자람

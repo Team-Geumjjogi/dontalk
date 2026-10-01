@@ -2,6 +2,9 @@
 import requests
 from flask import current_app
 
+# 타임아웃 계층: 브라우저(chat.js) 90초 > 웹→AI 70초 > AI 서버 안의 DB 검색 최대 ≈22초 + LLM 40초
+AI_TIMEOUT_SECONDS = 70
+
 
 def ask(session_id: str, message: str, history: list | None = None) -> dict:
     """history: 이번 상담의 직전 대화 [{"role": "user"|"assistant", "content": "..."}] (오래된 순). 후속 질문 이해용."""
@@ -10,7 +13,7 @@ def ask(session_id: str, message: str, history: list | None = None) -> dict:
     if history:
         payload["history"] = history
     try:
-        r = requests.post(url, json=payload, timeout=60)
+        r = requests.post(url, json=payload, timeout=AI_TIMEOUT_SECONDS)
         r.raise_for_status()
         return r.json()
     except requests.RequestException as e:

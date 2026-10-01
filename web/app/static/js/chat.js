@@ -62,10 +62,17 @@ async function api(path, body = {}) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(70000),  // AI 서버 대기(최대 60초)보다 조금 길게
+    signal: AbortSignal.timeout(90000),  // 웹→AI 대기(최대 70초)보다 길게
   });
   if (!response.ok && response.status !== 409) throw new Error(`HTTP ${response.status}`);
   return response.json();
+}
+
+// 실패 원인에 맞는 안내: 오래 걸림 / 인터넷 연결 / 서버 오류
+function describeFailure(error) {
+  if (error?.name === "TimeoutError") return "답변이 너무 오래 걸리고 있어요. 잠시 후 다시 시도해 주세요.";
+  if (!navigator.onLine || error instanceof TypeError) return "인터넷 연결을 확인하고 다시 시도해 주세요.";
+  return "서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.";
 }
 
 // ---------- 대화 말풍선 ----------
@@ -148,7 +155,7 @@ async function sendMessage(text, { retry = false } = {}) {
     if (data.handoff_needed) addActionRow("상담사 연결하기", openNameModal);
   } catch (error) {
     hideTyping();
-    addBubble("ai", "답변을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.", "bubble--error");
+    addBubble("ai", describeFailure(error), "bubble--error");
     addActionRow("다시 시도", () => sendMessage(text, { retry: true }));
   } finally {
     state.busy = false;
@@ -166,8 +173,8 @@ els.form.addEventListener("submit", (event) => {
 });
 
 // ---------- 상담 종료 / 상담사 연결 ----------
-function reportFailure() {
-  addBubble("ai", "처리하지 못했어요. 잠시 후 다시 시도해 주세요.", "bubble--error");
+function reportFailure(error) {
+  addBubble("ai", describeFailure(error), "bubble--error");
 }
 
 els.endButton.addEventListener("click", () => modals.end.showModal());
@@ -179,7 +186,7 @@ $("#end-confirm").addEventListener("click", async () => {
     state.flow = "ended";
     modals.rating.showModal();
   } catch (error) {
-    reportFailure();
+    reportFailure(error);
   }
 });
 
@@ -211,7 +218,7 @@ els.nameForm.addEventListener("submit", async (event) => {
     state.businessHours = result.business_hours ?? state.businessHours;
   } catch (error) {
     modals.name.close();
-    reportFailure();
+    reportFailure(error);
     return;
   }
   modals.name.close();

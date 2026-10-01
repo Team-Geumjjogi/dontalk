@@ -35,6 +35,24 @@ def _database_uri() -> URL:
     )
 
 
+def _engine_options() -> dict:
+    """원격 공용 DB 연결이 Wi-Fi 변경/절전/서버 쪽 정리로 조용히 끊겨도 요청이 멈추지 않게 하는 연결 옵션.
+    - pool_pre_ping/pool_recycle: 오래 놀던 연결은 쓰기 전에 확인하거나 새로 만든다
+    - keepalive/tcp_user_timeout: 응답 없는 연결을 30초 안팎(Linux 는 15초)에 에러로 끝낸다
+    - statement_timeout: 서버 쪽에서 오래 걸리는 쿼리를 중단 (기본 15초)
+    """
+    return {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "connect_args": {
+            "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+            "keepalives": 1, "keepalives_idle": 15, "keepalives_interval": 5, "keepalives_count": 3,
+            "tcp_user_timeout": 15000,
+            "options": f"-c statement_timeout={int(os.getenv('WEB_DB_STATEMENT_TIMEOUT', '15')) * 1000}",
+        },
+    }
+
+
 def create_app(database_uri: str | None = None) -> Flask:
     """database_uri: 테스트에서 공용 DB 대신 임시 DB(sqlite 등)를 쓰려고 직접 넘기는 용도. 보통은 비워둔다."""
     app = Flask(__name__)
@@ -43,7 +61,8 @@ def create_app(database_uri: str | None = None) -> Flask:
     app.config["AI_SERVER_URL"] = os.getenv("AI_SERVER_URL", "http://localhost:8000")
 
     app.config["SQLALCHEMY_DATABASE_URI"] = database_uri or _database_uri()
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}  # 원격 DB 연결이 끊겨 있으면 자동으로 다시 연결
+    # 공용 DB(postgres)에는 끊김 대비 옵션을 쓰고, 테스트용 임시 DB(sqlite 등)에는 기본 옵션만 쓴다
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_options() if database_uri is None else {"pool_pre_ping": True}
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     app.jinja_env.filters["kst"] = format_kst  # {{ consult.created_at|kst }}

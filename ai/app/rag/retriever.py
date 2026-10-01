@@ -4,10 +4,16 @@
 접속 정보는 .env 의 DB_* 입니다 (로컬 docker 의 POSTGRES_* / DATABASE_URL 과는 별개).
   DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME
   DB_SSLMODE(기본 require) DB_SSLNEGOTIATION(기본 direct) DB_CONNECT_TIMEOUT(기본 10) DB_TABLE(기본 financial_consulting_qa)
+  DB_QUERY_TIMEOUT(기본 6초: 이 시간 안에 응답이 없으면 연결을 버리고 새로 연결해 한 번 더 시도)
   RAG_TOP_K(기본 5)
+
+원격 DB 연결은 Wi-Fi 변경/절전/서버 쪽 정리로 조용히 끊길 수 있다. 그러면 쿼리가 에러 없이 한참 멈추는데,
+(1) TCP keepalive, (2) 쿼리 타임아웃(워치독), (3) 연결을 버리고 재시도 로 멈춤 대신 에러가 나서 상담사 이관 안내로 넘어가게 한다.
 """
 import os
-from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as QueryTimeout
+from threading import Lock, Thread
 from typing import List
 
 import psycopg
@@ -23,6 +29,7 @@ load_dotenv()
 DB_TABLE = os.getenv("DB_TABLE", "financial_consulting_qa")
 EMBEDDING_COLUMN = "embedding_q"  # 고객 질문만 임베딩한 컬럼
 TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+QUERY_TIMEOUT = float(os.getenv("DB_QUERY_TIMEOUT", "6"))
 _EMBEDDING_MODEL = config.EMBEDDING_MODEL or "dragonkue/snowflake-arctic-embed-l-v2.0-ko"
 
 # LLM 에 쓰는 개별 컬럼 + 분야 판단용 메타데이터 (컬럼을 텍스트로 합치지 않고 그대로 가져온다)
@@ -35,6 +42,7 @@ _model = None
 _model_lock = Lock()
 _conn = None
 _conn_lock = Lock()
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="kb-query")  # 쿼리를 별도 스레드에서 돌려 타임아웃을 걸 수 있게 한다
 
 
 def _get_model():
@@ -57,7 +65,10 @@ def _connect():
         dbname=os.environ["DB_NAME"],
         sslmode=os.getenv("DB_SSLMODE", "require"),
         connect_timeout=int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
-        options="-c default_transaction_read_only=on",  # 공용 DB 보호: 서버 쪽에서 쓰기 차단
+        # 공용 DB 보호: 서버 쪽에서 쓰기 차단 + 오래 걸리는 쿼리 중단
+        options=f"-c default_transaction_read_only=on -c statement_timeout={int(QUERY_TIMEOUT * 1000)}",
+        keepalives=1, keepalives_idle=15, keepalives_interval=5, keepalives_count=3,  # 끊긴 연결을 약 30초 안에 알아챈다
+        tcp_user_timeout=15000,  # 응답 없는 전송을 15초 뒤 포기 (Linux 에서만 동작, 맥에서는 무시됨)
     )
     if os.getenv("DB_SSLNEGOTIATION", "direct"):
         kwargs["sslnegotiation"] = os.getenv("DB_SSLNEGOTIATION", "direct")
@@ -66,21 +77,43 @@ def _connect():
     return conn
 
 
-def _query(statement, params) -> List[dict]:
-    """연결을 재사용하고, 끊겨 있으면 한 번만 다시 연결해서 재시도한다."""
+def _run(conn, statement, params) -> List[dict]:
+    with conn.cursor() as cur:
+        cur.execute(statement, params)
+        return cur.fetchall()
+
+
+def _close_quietly(conn) -> None:
+    try:
+        conn.close()
+    except Exception:
+        pass
+
+
+def _drop_connection() -> None:
+    """응답 없는/끊긴 연결은 버린다. 닫는 동작 자체가 멈출 수 있어 별도 스레드에서 시도하고, 다음 호출이 새로 연결한다."""
     global _conn
+    broken, _conn = _conn, None
+    if broken is not None:
+        Thread(target=_close_quietly, args=(broken,), daemon=True).start()
+
+
+def _query(statement, params) -> List[dict]:
+    """연결을 재사용한다. 끊겼거나 QUERY_TIMEOUT 안에 응답이 없으면 연결을 버리고 새로 연결해서 한 번만 다시 시도한다."""
+    global _conn
+    last_error: Exception = RuntimeError("공용 DB 조회 실패")
     with _conn_lock:
-        for attempt in (1, 2):
+        for _ in range(2):
             try:
                 if _conn is None or _conn.closed:
                     _conn = _connect()
-                with _conn.cursor() as cur:
-                    cur.execute(statement, params)
-                    return cur.fetchall()
-            except (psycopg.OperationalError, psycopg.InterfaceError):
-                _conn = None
-                if attempt == 2:
-                    raise
+                return _executor.submit(_run, _conn, statement, params).result(timeout=QUERY_TIMEOUT)
+            except QueryTimeout:
+                last_error = TimeoutError(f"공용 DB 응답이 {QUERY_TIMEOUT:g}초 안에 오지 않았습니다")
+            except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+                last_error = e
+            _drop_connection()
+    raise last_error
 
 
 def warm_up() -> None:
