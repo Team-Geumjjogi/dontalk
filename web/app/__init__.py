@@ -7,23 +7,41 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask
+from sqlalchemy.engine import URL
 
 from app.extensions import db, login_manager
 
 load_dotenv()
 
 
-def create_app() -> Flask:
+def _database_uri() -> URL:
+    """웹 전용 테이블(customer/consult/employee/message)은 팀 공용 DB(.env 의 DB_*)에 둔다.
+
+    같은 DB 안에 RAG 지식베이스(financial_consulting_qa)도 있지만 테이블이 다르다. 이전의 로컬 DB(POSTGRES_*, DATABASE_URL)는 쓰지 않는다.
+    psycopg(v3) 드라이버를 쓰고, 비밀번호에 특수문자가 있어도 안전하도록 문자열이 아니라 URL 객체로 조립한다.
+    """
+    missing = [k for k in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME") if not os.getenv(k)]
+    if missing:
+        raise RuntimeError(f".env 에 공용 DB 접속 정보가 없습니다: {', '.join(missing)}")
+    query = {"sslmode": os.getenv("DB_SSLMODE", "require")}
+    if os.getenv("DB_SSLNEGOTIATION", "direct"):
+        query["sslnegotiation"] = os.getenv("DB_SSLNEGOTIATION", "direct")
+    return URL.create(
+        "postgresql+psycopg",
+        username=os.environ["DB_USER"], password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"], port=int(os.environ["DB_PORT"]), database=os.environ["DB_NAME"],
+        query=query,
+    )
+
+
+def create_app(database_uri: str | None = None) -> Flask:
+    """database_uri: 테스트에서 공용 DB 대신 임시 DB(sqlite 등)를 쓰려고 직접 넘기는 용도. 보통은 비워둔다."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-only-change-me")
     app.config["AI_SERVER_URL"] = os.getenv("AI_SERVER_URL", "http://localhost:8000")
 
-    # DATABASE_URL은 docker-compose로 띄운 pgvector용 Postgres를 그대로 재사용한다 (AI 쪽과 같은 DB, 다른 테이블).
-    # psycopg2가 아니라 psycopg(v3)를 쓰고 있어서, SQLAlchemy가 psycopg3 드라이버를 쓰도록 스킴을 바꿔준다.
-    database_url = os.getenv("DATABASE_URL", "")
-    if database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_uri or _database_uri()
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}  # 원격 DB 연결이 끊겨 있으면 자동으로 다시 연결
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
@@ -32,7 +50,7 @@ def create_app() -> Flask:
 
     with app.app_context():
         # Spring의 ddl-auto: update 와 같은 방식 — 모델에 정의됐는데 DB에 없는 테이블만 만들어준다.
-        # 이미 있는 테이블(document_chunk 포함)은 절대 건드리지 않고, 기존 테이블의 컬럼 변경도 감지하지 않는다
+        # 이미 있는 테이블(financial_consulting_qa 포함)은 절대 건드리지 않고, 기존 테이블의 컬럼 변경도 감지하지 않는다
         # (컬럼을 바꿨다면 개발 단계에선 그냥 테이블을 지우고 다시 만드는 게 제일 간단하다).
         db.create_all()
 

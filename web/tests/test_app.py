@@ -1,8 +1,10 @@
 from app import create_app
 
+# 테스트는 팀 공용 DB 대신 항상 임시 sqlite DB를 쓴다 (공용 DB에 테스트 데이터가 쌓이지 않게).
 
-def test_index():
-    client = create_app().test_client()
+
+def test_index(tmp_path):
+    client = create_app(f"sqlite:///{tmp_path}/test.db").test_client()
     assert client.get("/").status_code == 200
 
 
@@ -11,8 +13,7 @@ def test_chat_sends_history_and_keeps_category(tmp_path, monkeypatch):
     from app.extensions import db
     from app.models import Consult
 
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test.db")  # 로컬 개발 DB 대신 임시 DB
-    app = create_app()
+    app = create_app(f"sqlite:///{tmp_path}/test.db")
     client = app.test_client()
 
     replies = [
