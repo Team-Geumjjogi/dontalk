@@ -61,3 +61,52 @@
 .modal__actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-6); }
 .modal__actions--row { flex-direction: row; }
 .modal__actions--row > * { flex: 1; }
+
+/* --- tabs: 링크형 탭 --- */
+.tabs { display: flex; border-bottom: 1px solid var(--color-border); }
+.tabs__item {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  text-decoration: none;
+  transition: background-color var(--transition);
+}
+.tabs__item:hover { background: var(--color-bg-app); }
+.tabs__item--active { border-bottom-color: var(--color-accent); color: var(--color-text); }
+
+/* --- table: 목록 표 --- */
+.table { width: 100%; border-collapse: collapse; font-size: var(--text-md); }
+.table th {
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  white-space: nowrap;
+}
+.table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: var(--color-bg-app); }
+.table__time { color: var(--color-text-muted); font-size: var(--text-sm); white-space: nowrap; }
+
+/* --- pagination --- */
+.pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-4); margin-top: var(--space-5); }
+.pagination__info { color: var(--color-text-muted); font-size: var(--text-sm); }
+
+/* --- 기타 --- */
+.prewrap { white-space: pre-wrap; }  /* 입력한 줄바꿈 유지 */
+
+/* --- source-list: AI가 참고한 상담 사례 (상담사/관리자 상세 공통) --- */
+.source-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-3); }
+.source-list__item { padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.source-list summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+.source-list__question { font-weight: var(--weight-medium); }
+.source-list__meta { color: var(--color-text-muted); font-size: var(--text-xs); }
+.source-list__detail { margin-top: var(--space-3); }
+.source-list__detail dt { flex-basis: 7rem; }
+.source-list__output { white-space: pre-wrap; }

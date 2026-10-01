@@ -1,0 +1,13 @@
+{#- 라벨 + 선택 상자. options 는 (값, 표시) 쌍의 목록.
+    사용: {{ select("category", "분야", [("all", "전체"), ("은행", "은행")], selected="all") }} -#}
+{% macro select(name, label, options, selected=None, required=False) %}
+{%- set input_id = "field-" ~ name -%}
+<div class="field">
+  <label class="field__label" for="{{ input_id }}">{{ label }}</label>
+  <select class="field__input" id="{{ input_id }}" name="{{ name }}"{{ " required" if required }}>
+    {%- for value, text in options %}
+    <option value="{{ value }}"{{ " selected" if value|string == selected|string }}>{{ text }}</option>
+    {%- endfor %}
+  </select>
+</div>
+{% endmacro %}
