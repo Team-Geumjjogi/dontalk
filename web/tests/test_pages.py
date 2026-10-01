@@ -1,27 +1,6 @@
 """공개 화면(랜딩/로그인)과 공통 컴포넌트 테스트. 항상 임시 sqlite DB 를 쓴다."""
 import pytest
 
-from app import create_app
-from app.extensions import db
-from app.models import Employee, EmployeeRole
-
-
-@pytest.fixture
-def app(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path}/test.db")
-    with app.app_context():
-        agent = Employee(name="김서연", email="agent@test.com", role=EmployeeRole.agent, department="은행")
-        agent.set_password("test-pass")
-        db.session.add(agent)
-        db.session.commit()
-    return app
-
-
-@pytest.fixture
-def client(app):
-    return app.test_client()
-
-
 def test_landing_splits_customer_and_staff(client):
     html = client.get("/").get_data(as_text=True)
     assert 'href="/chat"' in html and "AI 상담 시작하기" in html    # 고객: 상담 시작
@@ -39,14 +18,14 @@ def test_login_page_has_form_and_back_link(client):
 
 
 def test_login_failure_keeps_email_and_shows_alert(client):
-    response = client.post("/login", data={"email": "agent@test.com", "password": "wrong"})
+    response = client.post("/login", data={"email": "bank@test.com", "password": "wrong"})
     html = response.get_data(as_text=True)
     assert response.status_code == 401
-    assert 'role="alert"' in html and 'value="agent@test.com"' in html
+    assert 'role="alert"' in html and 'value="bank@test.com"' in html
 
 
 def test_login_success_goes_to_agent_queue(client):
-    response = client.post("/login", data={"email": "agent@test.com", "password": "test-pass"})
+    response = client.post("/login", data={"email": "bank@test.com", "password": "test-pass"})
     assert response.status_code == 302 and response.headers["Location"].endswith("/agent/")
 
 

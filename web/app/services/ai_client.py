@@ -15,4 +15,4 @@ def ask(session_id: str, message: str, history: list | None = None) -> dict:
         return r.json()
     except requests.RequestException as e:
         return {"answer": "죄송합니다. 지금은 AI 상담을 이용할 수 없어요. 상담사 연결을 이용해 주세요.",
-                "handoff_needed": True, "handoff_reason": f"AI 서버 오류: {e.__class__.__name__}"}
+                "handoff_needed": True, "handoff_code": "ai_error", "handoff_reason": f"AI 서버 오류: {e.__class__.__name__}"}
