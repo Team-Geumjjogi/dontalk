@@ -1,0 +1,4 @@
+/* 공개 화면(랜딩, 로그인) 레이아웃: 상단바 아래 본문 영역. */
+.public-main {
+  padding-block: var(--space-8) var(--space-16);
+}

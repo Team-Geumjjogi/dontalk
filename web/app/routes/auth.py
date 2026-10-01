@@ -17,7 +17,7 @@ def login():
 
     employee = Employee.query.filter_by(email=email).first()
     if employee is None or not employee.check_password(password):
-        return render_template("login.html", error="이메일 또는 비밀번호가 올바르지 않습니다."), 401
+        return render_template("login.html", error="이메일 또는 비밀번호가 올바르지 않습니다.", email=email), 401
 
     login_user(employee)  # 세션에 "이 사람이 로그인했다"를 기록 (Spring의 SecurityContext에 Authentication 채우는 것과 같은 역할)
 

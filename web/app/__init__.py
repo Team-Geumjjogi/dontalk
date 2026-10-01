@@ -64,8 +64,9 @@ def create_app(database_uri: str | None = None) -> Flask:
         # 세션에 저장된 id로 실제 Employee row를 다시 불러오는 콜백 (Spring의 UserDetailsService.loadUserByUsername 과 같은 역할)
         return models.Employee.query.get(int(employee_id))
 
-    from app.routes import admin, agent, auth, chat
+    from app.routes import admin, agent, auth, chat, main
 
+    app.register_blueprint(main.bp)
     app.register_blueprint(auth.bp)
     app.register_blueprint(chat.bp)
     app.register_blueprint(agent.bp)

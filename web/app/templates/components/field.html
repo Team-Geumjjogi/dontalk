@@ -1,0 +1,15 @@
+{#- 라벨 + 입력창 한 묶음. id 는 "field-이름" 으로 자동 지정되어 라벨과 연결된다.
+    사용: {{ field("email", "이메일", type="email", required=True, autofocus=True) }} -#}
+{% macro field(name, label, type="text", placeholder="", value="", required=False, autofocus=False, autocomplete=None, hint=None) %}
+{%- set input_id = "field-" ~ name -%}
+<div class="field">
+  <label class="field__label" for="{{ input_id }}">{{ label }}</label>
+  <input class="field__input" id="{{ input_id }}" name="{{ name }}" type="{{ type }}" placeholder="{{ placeholder }}" value="{{ value }}"
+         {{- " required" if required }}{{ " autofocus" if autofocus }}
+         {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+         {%- if hint %} aria-describedby="{{ input_id }}-hint"{% endif %}>
+  {%- if hint %}
+  <p class="field__hint" id="{{ input_id }}-hint">{{ hint }}</p>
+  {%- endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,12 @@
+{#- 버튼. href 를 주면 <a>, 아니면 <button>.
+    variant: primary | secondary | ghost | danger     size: sm | md | lg     block=True 면 가로 가득
+    그 외 속성(id, data-*, disabled 등)은 그대로 넘기면 붙는다.
+    사용: {{ button("로그인", type="submit", block=True) }}   {{ button("홈", href="/", variant="ghost") }} -#}
+{% macro button(label, href=None, variant="primary", size="md", type="button", block=False) %}
+{%- set cls = "btn btn--" ~ variant ~ (" btn--" ~ size if size != "md" else "") ~ (" btn--block" if block else "") -%}
+{%- if href -%}
+<a class="{{ cls }}" href="{{ href }}" {{ kwargs|xmlattr }}>{{ label }}</a>
+{%- else -%}
+<button class="{{ cls }}" type="{{ type }}" {{ kwargs|xmlattr }}>{{ label }}</button>
+{%- endif -%}
+{% endmacro %}

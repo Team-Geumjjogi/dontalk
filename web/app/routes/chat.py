@@ -17,7 +17,7 @@ from app.services.business_hours import is_business_hours
 bp = Blueprint("chat", __name__)
 
 
-@bp.route("/")
+@bp.route("/chat")
 def index():
     session.setdefault("session_id", str(uuid.uuid4()))  # AI 서버 호출용 (우리 DB의 customer_id와는 별개)
     return render_template("chat.html")

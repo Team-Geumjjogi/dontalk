@@ -1,0 +1,10 @@
+{#- 카드. 내용은 {% call %} 블록으로 넣는다.
+    사용: {% call card(title="근거 있는 답변") %}설명 글{% endcall %} -#}
+{% macro card(title=None) %}
+<section class="card">
+  {%- if title %}
+  <h3 class="card__title">{{ title }}</h3>
+  {%- endif %}
+  <div class="card__body">{{ caller() }}</div>
+</section>
+{% endmacro %}

@@ -9,19 +9,8 @@
 <body>
   <div class="phone-frame">
 
-    <!-- 인트로 화면 -->
-    <section id="screen-intro" class="screen active">
-      <div></div>
-      <div>
-        <span class="badge">24시간 AI 금융 상담</span>
-        <h1>돈 이야기가<br>더 이상 어렵지 않아요</h1>
-        <p>돈에 대해 편하게 이야기하고, 금융 고민을 톡톡 풀어주는<br>AI 상담 서비스를 만나보세요.</p>
-      </div>
-      <button class="start-btn" id="start-btn">시작하기 →</button>
-    </section>
-
     <!-- 채팅 화면 -->
-    <section id="screen-chat" class="screen">
+    <section id="screen-chat" class="screen active">
       <div class="chat-header">
         <span class="title">돈톡 AI</span>
         <span class="status">영업중</span>
@@ -72,11 +61,6 @@
     const logEl = document.getElementById("log");
     const handoffBtn = document.getElementById("handoff-btn");
     let currentConsultId = null;
-
-    document.getElementById("start-btn").addEventListener("click", () => {
-      document.getElementById("screen-intro").classList.remove("active");
-      document.getElementById("screen-chat").classList.add("active");
-    });
 
     function addBubble(sender, text) {
       const row = document.createElement("div");

@@ -1,0 +1,5 @@
+{#- 안내/오류 메시지. tone: info | danger (danger 는 스크린리더가 바로 읽어준다)
+    사용: {{ alert("이메일 또는 비밀번호가 올바르지 않습니다.") }} -#}
+{% macro alert(message, tone="danger") %}
+<div class="alert alert--{{ tone }}" role="{{ 'alert' if tone == 'danger' else 'status' }}">{{ message }}</div>
+{% endmacro %}
