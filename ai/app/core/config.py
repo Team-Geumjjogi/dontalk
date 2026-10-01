@@ -9,4 +9,7 @@ AI_MOCK_MODE = os.getenv("AI_MOCK_MODE", "true").lower() == "true"
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")
 LLM_MODEL_ID = os.getenv("LLM_MODEL_ID", "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct")
 LLM_ADAPTER_PATH = os.getenv("LLM_ADAPTER_PATH", "")
+LLM_DEVICE = os.getenv("LLM_DEVICE", "auto").strip().lower()
+LLM_LOAD_IN_4BIT = os.getenv("LLM_LOAD_IN_4BIT", "false").strip().lower()
+LLM_ADAPTER_ROOT = os.getenv("LLM_ADAPTER_ROOT", "")
 VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH", "data/processed/index")
