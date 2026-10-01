@@ -4,10 +4,22 @@
     uvicorn app.main:app --reload --port 8000
 확인:  http://localhost:8000/health   /   http://localhost:8000/docs
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api import chat, health
+from app.core import config
+from app.services import chat_service
 
-app = FastAPI(title="DonTalk AI Server")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not config.AI_MOCK_MODE:
+        chat_service.warm_up()  # 임베딩 모델/DB 연결 미리 준비 (첫 질문 지연 방지)
+    yield
+
+
+app = FastAPI(title="DonTalk AI Server", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(chat.router)
