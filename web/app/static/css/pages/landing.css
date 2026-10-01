@@ -30,3 +30,4 @@
 @media (max-width: 52rem) {
   .features { grid-template-columns: 1fr; }
 }
+.features .card__body { color: var(--color-text-muted); }

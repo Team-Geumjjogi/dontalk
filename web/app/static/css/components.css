@@ -1,0 +1,63 @@
+/* 여러 화면에서 같이 쓰는 조합형 컴포넌트: stat-card, empty-state, key-value, conversation, meter, modal.
+   base.css 의 기본 요소(btn, card, badge…)를 조합해서 쓰고, 값은 tokens.css 변수만 쓴다. */
+
+/* --- stat-card: 숫자 지표 --- */
+.stat-card {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.stat-card__label { color: var(--color-text-muted); font-size: var(--text-sm); }
+.stat-card__value { margin-top: var(--space-1); font-size: var(--text-xl); font-weight: var(--weight-bold); line-height: var(--leading-tight); }
+.stat-card__note { margin-top: var(--space-1); color: var(--color-text-muted); font-size: var(--text-xs); }
+
+/* --- empty-state --- */
+.empty-state { padding: var(--space-10) var(--space-6); text-align: center; }
+.empty-state__title { font-weight: var(--weight-semibold); }
+.empty-state__description { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+
+/* --- key-value: 항목: 값 --- */
+.key-value { margin: 0; display: grid; gap: var(--space-2); font-size: var(--text-md); }
+.key-value__row { display: flex; gap: var(--space-3); }
+.key-value dt { flex: 0 0 5.5rem; color: var(--color-text-muted); }
+.key-value dd { margin: 0; font-weight: var(--weight-medium); }
+
+/* --- conversation: 상담 대화 내역(읽기 전용) --- */
+.conversation { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-3); }
+.conversation__item { display: grid; grid-template-columns: 2.75rem 1fr; gap: var(--space-3); font-size: var(--text-md); }
+.conversation__sender { color: var(--color-text-muted); font-weight: var(--weight-semibold); }
+.conversation__item--customer .conversation__sender { color: var(--tone-info-fg); }
+.conversation__item--ai .conversation__sender { color: var(--color-accent-text); }
+.conversation__text { white-space: pre-wrap; line-height: var(--leading-relaxed); }  /* AI 답변의 줄바꿈 유지 */
+
+/* --- meter: 비율 막대 --- */
+.meter { display: grid; grid-template-columns: 4rem 1fr auto; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
+.meter__bar { width: 100%; height: 0.625rem; border: 0; border-radius: var(--radius-pill); background: var(--tone-neutral-bg); overflow: hidden; accent-color: var(--color-accent); }
+.meter__bar::-webkit-progress-bar { background: var(--tone-neutral-bg); }
+.meter__bar::-webkit-progress-value { background: var(--color-accent); border-radius: var(--radius-pill); }
+.meter__bar::-moz-progress-bar { background: var(--color-accent); border-radius: var(--radius-pill); }
+.meter__value { color: var(--color-text-muted); white-space: nowrap; }
+
+/* --- alert 변형 --- */
+.alert--success { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+
+/* --- modal: <dialog> 기반. 열고 닫기는 JS 의 showModal()/close() --- */
+.modal {
+  width: min(24rem, calc(100% - var(--space-8)));
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+.modal::backdrop { background: rgba(0, 0, 0, 0.45); }
+.modal__icon { font-size: 2rem; line-height: 1; margin-bottom: var(--space-3); }
+.modal__title { font-size: var(--text-lg); font-weight: var(--weight-bold); }
+.modal__text { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-md); line-height: var(--leading-relaxed); }
+.modal__body { margin-top: var(--space-5); }
+.modal__actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-6); }
+.modal__actions--row { flex-direction: row; }
+.modal__actions--row > * { flex: 1; }

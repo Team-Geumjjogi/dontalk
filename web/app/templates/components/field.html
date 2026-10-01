@@ -1,13 +1,20 @@
-{#- 라벨 + 입력창 한 묶음. id 는 "field-이름" 으로 자동 지정되어 라벨과 연결된다.
-    사용: {{ field("email", "이메일", type="email", required=True, autofocus=True) }} -#}
-{% macro field(name, label, type="text", placeholder="", value="", required=False, autofocus=False, autocomplete=None, hint=None) %}
+{#- 라벨 + 입력창 한 묶음. id 는 "field-이름" 으로 자동 지정되어 라벨과 연결된다. type="textarea" 면 여러 줄 입력.
+    사용: {{ field("email", "이메일", type="email", required=True, autofocus=True) }}
+          {{ field("summary", "상담 메모", type="textarea", rows=5, required=True) }} -#}
+{% macro field(name, label, type="text", placeholder="", value="", required=False, autofocus=False, autocomplete=None, hint=None, rows=4) %}
 {%- set input_id = "field-" ~ name -%}
 <div class="field">
   <label class="field__label" for="{{ input_id }}">{{ label }}</label>
+  {%- if type == "textarea" %}
+  <textarea class="field__input field__input--multiline" id="{{ input_id }}" name="{{ name }}" rows="{{ rows }}" placeholder="{{ placeholder }}"
+            {{- " required" if required }}{{ " autofocus" if autofocus }}
+            {%- if hint %} aria-describedby="{{ input_id }}-hint"{% endif %}>{{ value }}</textarea>
+  {%- else %}
   <input class="field__input" id="{{ input_id }}" name="{{ name }}" type="{{ type }}" placeholder="{{ placeholder }}" value="{{ value }}"
          {{- " required" if required }}{{ " autofocus" if autofocus }}
          {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
          {%- if hint %} aria-describedby="{{ input_id }}-hint"{% endif %}>
+  {%- endif %}
   {%- if hint %}
   <p class="field__hint" id="{{ input_id }}-hint">{{ hint }}</p>
   {%- endif %}

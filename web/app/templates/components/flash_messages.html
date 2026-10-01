@@ -1,0 +1,13 @@
+{#- 서버가 flash() 로 남긴 메시지(저장 완료, 오류 등)를 알림으로 보여준다. 메시지가 없으면 아무것도 출력하지 않는다.
+    사용: {{ flash_messages() }}   화면 전체 폭이면 {{ flash_messages(fluid=True) }} -#}
+{% from "components/alert.html" import alert %}
+{% macro flash_messages(fluid=False) %}
+{%- set messages = get_flashed_messages(with_categories=true) -%}
+{%- if messages %}
+<div class="flash-list container{{ ' container--fluid' if fluid }} stack">
+  {%- for tone, message in messages %}
+  {{ alert(message, tone=tone) }}
+  {%- endfor %}
+</div>
+{%- endif %}
+{% endmacro %}

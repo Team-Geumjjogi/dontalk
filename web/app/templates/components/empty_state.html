@@ -1,0 +1,9 @@
+{#- 비어 있을 때 안내. 사용: {{ empty_state("대기 중인 상담이 없습니다", "새 상담이 접수되면 여기에 표시됩니다.") }} -#}
+{% macro empty_state(title, description=None) %}
+<div class="empty-state">
+  <p class="empty-state__title">{{ title }}</p>
+  {%- if description %}
+  <p class="empty-state__description">{{ description }}</p>
+  {%- endif %}
+</div>
+{% endmacro %}

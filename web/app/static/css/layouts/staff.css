@@ -1,0 +1,7 @@
+/* 상담사/관리자 업무 화면 레이아웃: 위에 흰 상단바, 아래 회색 업무 영역. 데스크톱 기준. */
+.app-body { background: var(--color-bg-app); }
+.staff-user { color: var(--color-text-muted); font-size: var(--text-sm); }
+.staff-user strong { color: var(--color-text); font-weight: var(--weight-semibold); }
+.staff-main { padding: var(--space-6); }
+.staff-main--full { padding: 0; }   /* 상담사 화면처럼 영역을 꽉 채우는 경우 */
+.staff-title { margin-bottom: var(--space-5); font-size: var(--text-xl); font-weight: var(--weight-bold); }

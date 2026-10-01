@@ -31,6 +31,8 @@ button, input, textarea { font: inherit; }
   padding-inline: var(--space-6);
 }
 
+.container--fluid { max-width: none; }
+
 .stack { display: flex; flex-direction: column; gap: var(--stack-gap, var(--space-4)); }
 
 .visually-hidden {
@@ -61,6 +63,7 @@ button, input, textarea { font: inherit; }
   align-items: center;
   min-height: var(--header-height);
 }
+.flash-list { margin-top: var(--space-4); }
 .site-header--bordered {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -121,6 +124,7 @@ button, input, textarea { font: inherit; }
   color: var(--color-text);
   transition: border-color var(--transition);
 }
+.field__input--multiline { padding: var(--space-3) var(--space-4); line-height: var(--leading-relaxed); resize: vertical; }
 .field__input::placeholder { color: var(--color-text-muted); }
 .field__input:focus-visible { outline-offset: 1px; border-color: var(--color-accent-text); }
 .field__hint { font-size: var(--text-xs); color: var(--color-text-muted); }
@@ -152,7 +156,8 @@ button, input, textarea { font: inherit; }
   box-shadow: var(--shadow-sm);
 }
 .card__title { margin-bottom: var(--space-2); font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.card__body { color: var(--color-text-muted); font-size: var(--text-md); line-height: var(--leading-relaxed); }
+.card__body { font-size: var(--text-md); line-height: var(--leading-relaxed); }
+.card--accent { background: var(--color-bg); border-color: var(--color-accent-soft); }
 
 /* --- alert: 안내/오류 메시지 --- */
 .alert {

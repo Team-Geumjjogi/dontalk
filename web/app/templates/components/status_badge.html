@@ -1,0 +1,6 @@
+{#- 상담 상태 배지. 사용: {{ status_badge(consult) }} -#}
+{% from "components/badge.html" import badge %}
+{% macro status_badge(consult) %}
+{%- set tones = {"waiting_realtime": "warning", "waiting_next_day": "info", "completed": "success", "ended": "neutral", "chatting": "violet"} -%}
+{{ badge(consult.status.label, tone=tones[consult.status.value]) }}
+{%- endmacro %}
