@@ -39,6 +39,7 @@ def create_app(database_uri: str | None = None) -> Flask:
     """database_uri: 테스트에서 공용 DB 대신 임시 DB(sqlite 등)를 쓰려고 직접 넘기는 용도. 보통은 비워둔다."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-only-change-me")
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # 다른 사이트에서 보낸 POST 에는 세션 쿠키가 안 붙게 해서 CSRF 를 줄인다
     app.config["AI_SERVER_URL"] = os.getenv("AI_SERVER_URL", "http://localhost:8000")
 
     app.config["SQLALCHEMY_DATABASE_URI"] = database_uri or _database_uri()
@@ -65,7 +66,7 @@ def create_app(database_uri: str | None = None) -> Flask:
     @login_manager.user_loader
     def load_user(employee_id: str):
         # 세션에 저장된 id로 실제 Employee row를 다시 불러오는 콜백 (Spring의 UserDetailsService.loadUserByUsername 과 같은 역할)
-        return models.Employee.query.get(int(employee_id))
+        return db.session.get(models.Employee, int(employee_id))
 
     from app.routes import admin, agent, auth, chat, main
 
