@@ -100,7 +100,7 @@ class LoaderConfig:
 TEXT_COLUMNS: list[str] = [
     "qa_id", "instruction", "question", "answer", "follow_up_question", "output",
     "full_source", "consulting_category", "consulting_topic", "qa_topic",
-    "consulting_purpose",
+    "consulting_purpose", "task_category", "consulting_situation",
 ]
 EMBEDDING_COLUMN = "embedding_q"
 INSERT_COLUMNS: list[str] = TEXT_COLUMNS + [EMBEDDING_COLUMN]
@@ -110,7 +110,7 @@ NOT_NULL_COLUMNS: list[str] = ["instruction", "question", "consulting_category"]
 # 빈 문자열("")을 NULL로 저장할 컬럼
 EMPTY_TO_NULL: list[str] = [
     "answer", "follow_up_question", "output",
-    "consulting_topic", "qa_topic", "consulting_purpose",
+    "consulting_topic", "qa_topic", "consulting_purpose", "task_category", "consulting_situation",
 ]
 
 

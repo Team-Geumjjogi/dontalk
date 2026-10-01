@@ -72,6 +72,8 @@ COLUMN_MAP: dict[str, str] = {
     "consulting_consulting_topic": "consulting_topic",
     "qa_data_qa_topic": "qa_topic",
     "qa_data_consulting_purpose": "consulting_purpose",
+    "qa_data_task_category": "task_category",
+    "qa_data_consulting_situation": "consulting_situation",
 }
 
 # 임베딩할 컬럼: (원본 컬럼, 결과 컬럼, 배치 크기)
