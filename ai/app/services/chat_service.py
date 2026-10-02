@@ -12,7 +12,7 @@
   3. 그 외에는 검색된 문서를 근거로 LLM 이 답변 → 마크다운 제거, [비공개] 문장 정리, 길이 제한(ANSWER_MAX_CHARS)
 
 .env (모두 선택, 없으면 기본값)
-  LLM_BACKEND          ollama(기본, 로컬 개발) | transformers(GPU 서버, 팀원 model.py + 분야별 어댑터)
+  
   RAG_MIN_SIMILARITY   기본 0.55  (업무 질문 15개 최소 0.63 / 업무 밖·경계 질문 최대 0.51 로 정한 초기값)
   RAG_MIN_CONFIDENCE   기본 0.6
   RAG_OUT_OF_SCOPE_BELOW 기본 0.45 (25개 질문 조사: 업무 밖 질문 최대 0.43, 업무 질문 최소 0.63)
@@ -24,13 +24,16 @@ import re
 import time
 from typing import List, Optional
 
+
 from app.core import config
 from app.rag import router
 from app.schemas.chat import ChatRequest, ChatResponse, Source
+from app.llm import vllm_client
+
 
 log = logging.getLogger("app.chat")
 
-LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama").strip().lower()
+
 MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.55"))
 MIN_CONFIDENCE = float(os.getenv("RAG_MIN_CONFIDENCE", "0.6"))
 OUT_OF_SCOPE_BELOW = float(os.getenv("RAG_OUT_OF_SCOPE_BELOW", "0.45"))
@@ -180,16 +183,8 @@ def _search(query: str) -> List[dict]:
 
 def _generate(message: str, category: Optional[str], docs: List[dict], history: List[dict]) -> str:
     clean = [_mask_doc(d) for d in docs]
-    if LLM_BACKEND == "transformers":
-        from app.llm import model  # 팀원 model.py (HF + 분야별 LoRA, 한 턴 입력). GPU 서버에서 사용
-
-        rag = "\n\n".join(d.get("full_source") or "" for d in clean)
-        past = "".join(f"{'고객' if t['role'] == 'user' else '상담사'}: {t['content']}\n" for t in history)
-        prefix = f"이전 대화:\n{past}\n" if past else ""
-        return model.answer(category, f"{prefix}고객 질문 : {message}\nRAG 결과: {rag}")
-    from app.llm import ollama_client
-
-    return ollama_client.generate(message, clean, history)
+    question = vllm_client.build_question(message, clean, history)
+    return vllm_client.generate_answer(category, question)
 
 
 def warm_up() -> None:
@@ -198,11 +193,7 @@ def warm_up() -> None:
         from app.rag import retriever
 
         retriever.warm_up()
-        if LLM_BACKEND == "transformers":
-            from app.llm import model
-
-            model.load_model()
-        log.info("워밍업 완료 (backend=%s)", LLM_BACKEND)
+        log.info("워밍업 완료")
     except Exception:
         log.exception("워밍업 실패 - 첫 요청 때 다시 시도합니다")
 

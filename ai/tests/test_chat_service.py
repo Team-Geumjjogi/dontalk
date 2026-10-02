@@ -88,7 +88,7 @@ def test_llm_error_hands_off(monkeypatch):
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
 
     def boom(m, c, d, h):
-        raise RuntimeError("ollama down")
+        raise RuntimeError("vllm down")
     monkeypatch.setattr(cs, "_generate", boom)
     r = ask()
     assert r.handoff_needed and r.handoff_code == "ai_error" and "LLM 오류" in r.handoff_reason
@@ -268,3 +268,74 @@ def test_off_topic_after_finance_question_gets_guidance(monkeypatch):
     monkeypatch.setattr(cs, "_generate", lambda *a: pytest.fail("LLM 을 부르면 안 됨"))
     r = ask("오늘 날씨 어때요?", history=HIST)
     assert not r.handoff_needed and r.answer == cs.MSG_OUT_OF_SCOPE and r.category is None
+
+
+def test_generate_sends_masked_docs_to_vllm(monkeypatch):
+    sent = {}
+
+    def fake_generate_answer(category, question, **kwargs):
+        sent.update(category=category, question=question)
+        return "답변"
+
+    monkeypatch.setattr(cs.vllm_client, "generate_answer", fake_generate_answer)
+
+    assert cs._generate("질문", "은행", [{"full_source": "계좌 ●●●● 입니다"}], []) == "답변"
+    assert sent["category"] == "은행"
+    assert "●" not in sent["question"] and "[비공개]" in sent["question"]
+
+
+def test_warm_up_calls_retriever_warm_up(monkeypatch):
+    from app.rag import retriever
+
+    calls = []
+    monkeypatch.setattr(retriever, "warm_up", lambda: calls.append("warm"))
+    cs.warm_up()
+    assert calls == ["warm"]
+
+
+def test_warm_up_swallows_errors(monkeypatch):
+    from app.rag import retriever
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(retriever, "warm_up", boom)
+    cs.warm_up()  # must not raise: the server should still start
+
+
+def test_app_startup_runs_warm_up_unless_mock(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    calls = []
+    monkeypatch.setattr(cs, "warm_up", lambda: calls.append("warm"))
+
+    monkeypatch.setattr(config, "AI_MOCK_MODE", True)
+    with TestClient(app):
+        pass
+    assert calls == []
+
+    monkeypatch.setattr(config, "AI_MOCK_MODE", False)
+    with TestClient(app):
+        pass
+    assert calls == ["warm"]
+
+
+def test_multi_turn_history_reaches_vllm_question(monkeypatch):
+    sent = {}
+
+    def fake_generate_answer(category, question, **kwargs):
+        sent.update(category=category, question=question)
+        return "수수료는 없습니다."
+
+    monkeypatch.setattr(config, "AI_MOCK_MODE", False)
+    monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
+    monkeypatch.setattr(cs.vllm_client, "generate_answer", fake_generate_answer)
+
+    r = ask("그럼 수수료는요?", history=HIST)
+
+    assert not r.handoff_needed and r.answer == "수수료는 없습니다."
+    question = sent["question"]
+    assert question.index("고객: 대출 만기 연장하고 싶어요") < question.index("상담사: 앱에서 가능합니다.") < question.index("고객 질문 : 그럼 수수료는요?")
+    assert sent["category"] == "은행"
