@@ -1,0 +1,76 @@
+import json
+
+import httpx
+import pytest
+
+from app.core import config
+from app.llm import vllm_client
+from app.llm.prompts import INSTRUCTION
+
+
+def make_client(handler) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def completion(text: str) -> dict:
+    return {"choices": [{"message": {"role": "assistant", "content": text}}]}
+
+
+def test_request_shape_and_adapter_selection(monkeypatch):
+    monkeypatch.setattr(config, "VLLM_BASE_URL", "http://vllm:8000/v1/")
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json=completion("  안내드립니다.  "))
+
+    answer = vllm_client.generate_answer("보험", "청구 방법이 궁금해요", client=make_client(handler))
+
+    assert answer == "안내드립니다."
+    assert captured["url"] == "http://vllm:8000/v1/chat/completions"
+    body = captured["body"]
+    assert body["model"] == "insurance"
+    assert body["messages"] == [
+        {"role": "system", "content": INSTRUCTION},
+        {"role": "user", "content": "청구 방법이 궁금해요"},
+    ]
+    assert body["max_tokens"] == 512
+    assert body["temperature"] == 0.0
+
+
+@pytest.mark.parametrize("category, adapter", [("은행", "bank"), ("보험", "insurance"), ("증권", "securities")])
+def test_all_categories_map_to_adapters(category, adapter):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content)["model"])
+        return httpx.Response(200, json=completion("ok"))
+
+    vllm_client.generate_answer(category, "질문", client=make_client(handler))
+    assert seen == [adapter]
+
+
+@pytest.mark.parametrize(
+    "category, question, max_tokens",
+    [("부동산", "질문", 512), ("은행", "   ", 512), ("은행", None, 512), ("은행", "질문", 0), ("은행", "질문", True)],
+)
+def test_invalid_input_is_rejected_before_request(category, question, max_tokens):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("no request should be sent")
+
+    with pytest.raises(ValueError):
+        vllm_client.generate_answer(category, question, max_tokens, client=make_client(handler))
+
+
+def test_http_error_status_is_raised():
+    client = make_client(lambda request: httpx.Response(503, json={"error": "loading"}))
+    with pytest.raises(httpx.HTTPStatusError):
+        vllm_client.generate_answer("은행", "질문", client=client)
+
+
+@pytest.mark.parametrize("response_body", [{}, {"choices": []}, {"choices": [{"message": {}}]}])
+def test_malformed_response_raises_runtime_error(response_body):
+    client = make_client(lambda request: httpx.Response(200, json=response_body))
+    with pytest.raises(RuntimeError):
+        vllm_client.generate_answer("은행", "질문", client=client)

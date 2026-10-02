@@ -1,0 +1,64 @@
+# GPU server stack (RTX 3060, WSL2 Ubuntu + docker CLI). Not for local development.
+# Run: docker compose -f docker-compose.server.yml --env-file .env.server up -d
+# Model and adapter files are not in Git; place them under MODELS_DIR / ADAPTERS_DIR on the WSL ext4 disk
+# (avoid /mnt/c, it is very slow for large weights).
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: dontalk-vllm
+    restart: unless-stopped
+    ipc: host
+    ports:
+      - "${VLLM_PORT:-8001}:8000"
+    volumes:
+      - ${MODELS_DIR}:/models:ro
+      - ${ADAPTERS_DIR}:/adapters:ro
+
+    # Base model is served as "exaone"; each LoRA adapter is selected
+    # by its name in the request's "model" field.
+    command: >
+      --model /models/exaone
+      --served-model-name exaone
+      --trust-remote-code
+      --dtype half
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-4096}
+      --gpu-memory-utilization ${VLLM_GPU_UTIL:-0.85}
+      --enable-lora
+      --max-loras 3
+      --max-lora-rank ${VLLM_MAX_LORA_RANK:-16}
+      --lora-modules bank=/adapters/bank insurance=/adapters/insurance securities=/adapters/securities
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+
+  api:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+
+    container_name: dontalk-ai
+    restart: unless-stopped
+
+    ports:
+      - "${AI_PORT:-8000}:8000"
+
+    environment:
+      AI_MOCK_MODE: "${AI_MOCK_MODE:-false}"
+      VLLM_BASE_URL: "${VLLM_BASE_URL:-http://vllm:8000/v1}"
+
+    depends_on:
+      vllm:
+        condition: service_healthy

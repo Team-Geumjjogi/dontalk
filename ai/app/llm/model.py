@@ -8,8 +8,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from threading import RLock
 
-from .prompts import INSTRUCTION
 from ..core import config
+from .prompts import INSTRUCTION
 
 MODEL_ID = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
 ADAPTER_ROOT = Path(__file__).resolve().parent.parent / "adapters"
@@ -109,7 +109,7 @@ def answer(category: str, question: str, max_new_tokens: int = 512) -> str:
         inputs = tokenizer.apply_chat_template(
             [
                 {"role": "system", "content": INSTRUCTION},
-                {"role": "user", "content": f"고객 문의: {question}"},
+                {"role": "user", "content": question},
             ],
             tokenize=True,
             add_generation_prompt=True,
