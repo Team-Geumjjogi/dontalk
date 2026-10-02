@@ -1,5 +1,5 @@
 """HTTP client for the vLLM OpenAI-compatible server (defined in docker-compose.server.yml)."""
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 
@@ -12,7 +12,22 @@ ADAPTER_NAMES = {
     "증권": "securities",
 }
 
-REQUEST_TIMEOUT_SECONDS = 120.0
+
+def build_question(message: str, docs: Optional[List[dict]] = None, history: Optional[List[dict]] = None) -> str:
+    """Build the single user message the adapters were trained on.
+
+    Args:
+        message: Current customer question.
+        docs: Retrieved documents (dicts with a "full_source" text); order is kept.
+        history: Earlier turns as [{"role": "user"|"assistant", "content": "..."}], oldest first.
+
+    Returns:
+        "[이전 대화 ...] 고객 질문 : ... RAG 결과: ..." text for generate_answer.
+    """
+    rag = "\n\n".join(doc.get("full_source") or "" for doc in docs or [])
+    past = "".join(f"{'고객' if turn['role'] == 'user' else '상담사'}: {turn['content']}\n" for turn in history or [])
+    prefix = f"이전 대화:\n{past}\n" if past else ""
+    return f"{prefix}고객 질문 : {message}\nRAG 결과: {rag}"
 
 
 def generate_answer(
@@ -59,7 +74,7 @@ def generate_answer(
     url = f"{config.VLLM_BASE_URL.rstrip('/')}/chat/completions"
 
     if client is None:
-        with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as owned_client:
+        with httpx.Client(timeout=config.VLLM_TIMEOUT) as owned_client:
             response = owned_client.post(url, json=payload)
     else:
         response = client.post(url, json=payload)

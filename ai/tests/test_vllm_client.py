@@ -63,6 +63,36 @@ def test_invalid_input_is_rejected_before_request(category, question, max_tokens
         vllm_client.generate_answer(category, question, max_tokens, client=make_client(handler))
 
 
+def test_build_question_matches_transformers_format():
+    docs = [{"full_source": "문서1"}, {"full_source": "문서2"}, {"question": "no full_source"}]
+    history = [{"role": "user", "content": "대출 연장"}, {"role": "assistant", "content": "안내드립니다"}]
+
+    question = vllm_client.build_question("수수료는요?", docs, history)
+
+    assert question == (
+        "이전 대화:\n고객: 대출 연장\n상담사: 안내드립니다\n\n"
+        "고객 질문 : 수수료는요?\nRAG 결과: 문서1\n\n문서2\n\n"
+    )
+
+
+def test_build_question_without_docs_or_history():
+    assert vllm_client.build_question("질문") == "고객 질문 : 질문\nRAG 결과: "
+
+
+def test_client_uses_configured_timeout(monkeypatch):
+    monkeypatch.setattr(config, "VLLM_TIMEOUT", 12.0)
+    seen = {}
+
+    class FakeClient(httpx.Client):
+        def __init__(self, *args, **kwargs):
+            seen["timeout"] = kwargs.get("timeout")
+            super().__init__(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=completion("ok"))))
+
+    monkeypatch.setattr(vllm_client.httpx, "Client", FakeClient)
+    assert vllm_client.generate_answer("은행", "질문") == "ok"
+    assert seen["timeout"] == 12.0
+
+
 def test_http_error_status_is_raised():
     client = make_client(lambda request: httpx.Response(503, json={"error": "loading"}))
     with pytest.raises(httpx.HTTPStatusError):
@@ -74,3 +104,12 @@ def test_malformed_response_raises_runtime_error(response_body):
     client = make_client(lambda request: httpx.Response(200, json=response_body))
     with pytest.raises(RuntimeError):
         vllm_client.generate_answer("은행", "질문", client=client)
+
+
+@pytest.mark.parametrize("error", [httpx.ConnectError("refused"), httpx.ReadTimeout("timed out")])
+def test_connection_errors_propagate(error):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    with pytest.raises(httpx.HTTPError):
+        vllm_client.generate_answer("은행", "질문", client=make_client(handler))
