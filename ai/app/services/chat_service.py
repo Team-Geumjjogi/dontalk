@@ -43,6 +43,7 @@ MAX_HISTORY_TURNS = 6      # LLM 에 넘기는 이전 대화 개수
 MAX_TURN_CHARS = 500       # 이전 발화 1건당 최대 글자 수
 SOURCE_OUTPUT_MAX = 800    # 상담사 화면용 근거 문서의 종합 답변 최대 글자 수
 FOLLOW_UP_MAX_CHARS = 15   # 이 길이 이하면 후속 질문으로 보고 직전 질문을 붙여서 검색
+ERROR_DETAIL_MAX = 200     # 상담사 화면용 handoff_reason 에 붙이는 오류 메시지 최대 글자 수
 
 MSG_CONTACT = "상담사 연결을 도와드릴게요."
 MSG_ACTION = "계좌 해지·이체 같은 실제 처리는 상담사가 직접 도와드릴 수 있어요. 상담사 연결을 도와드릴게요."
@@ -227,6 +228,17 @@ def answer(req: ChatRequest) -> ChatResponse:
     return response
 
 
+def _error_reason(prefix: str, error: Exception) -> str:
+    """Build the counselor-facing handoff_reason: error type plus a short single-line message.
+
+    Never put this text in the customer-facing answer; the message can contain internal addresses.
+    """
+    detail = " ".join(str(error).split())[:ERROR_DETAIL_MAX]
+    if not detail:
+        return f"{prefix}: {error.__class__.__name__}"
+    return f"{prefix}: {error.__class__.__name__}: {detail}"
+
+
 def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
     message = req.message.strip()
 
@@ -264,7 +276,7 @@ def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
     if is_action_request(message):
         return handoff(MSG_ACTION, "action_request", "실제 처리가 필요한 요청 (AI는 안내만 가능)")
     if search_error is not None:
-        return handoff(MSG_ERROR, "ai_error", f"검색 오류: {search_error.__class__.__name__}")
+        return handoff(MSG_ERROR, "ai_error", _error_reason("검색 오류", search_error))
     if best < OUT_OF_SCOPE_BELOW:  # 날씨/잡담처럼 금융과 무관한 질문: 상담사에게 넘기지 않고 안내만 한다
         return ChatResponse(answer=MSG_OUT_OF_SCOPE)
     if not grounded:
@@ -277,7 +289,7 @@ def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
         text = limit_answer(clean_answer(_generate(message, category, docs, history)))
     except Exception as e:
         log.exception("LLM 답변 생성 실패")
-        return handoff(MSG_ERROR, "ai_error", f"LLM 오류: {e.__class__.__name__}")
+        return handoff(MSG_ERROR, "ai_error", _error_reason("LLM 오류", e))
     finally:
         timings["llm"] = time.perf_counter() - step
     if not text:

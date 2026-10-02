@@ -339,3 +339,29 @@ def test_multi_turn_history_reaches_vllm_question(monkeypatch):
     question = sent["question"]
     assert question.index("고객: 대출 만기 연장하고 싶어요") < question.index("상담사: 앱에서 가능합니다.") < question.index("고객 질문 : 그럼 수수료는요?")
     assert sent["category"] == "은행"
+
+
+def test_llm_error_reason_has_message_but_answer_does_not(monkeypatch):
+    monkeypatch.setattr(config, "AI_MOCK_MODE", False)
+    monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
+
+    def boom(m, c, d, h):
+        raise RuntimeError("connect to http://vllm:8000/v1\nrefused")
+    monkeypatch.setattr(cs, "_generate", boom)
+
+    r = ask()
+    assert r.handoff_reason == "LLM 오류: RuntimeError: connect to http://vllm:8000/v1 refused"
+    assert "vllm" not in r.answer and r.answer == cs.MSG_ERROR
+
+
+def test_search_error_reason_has_message(real_mode, monkeypatch):
+    def boom(m):
+        raise ConnectionError("db down")
+    monkeypatch.setattr(cs, "_search", boom)
+    assert ask().handoff_reason == "검색 오류: ConnectionError: db down"
+
+
+def test_error_reason_is_truncated_and_handles_empty_message():
+    long_reason = cs._error_reason("LLM 오류", RuntimeError("x" * 1000))
+    assert long_reason == "LLM 오류: RuntimeError: " + "x" * cs.ERROR_DETAIL_MAX
+    assert cs._error_reason("LLM 오류", RuntimeError()) == "LLM 오류: RuntimeError"
