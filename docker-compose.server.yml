@@ -10,7 +10,8 @@ services:
     restart: unless-stopped
     ipc: host
     ports:
-      - "${VLLM_PORT:-8001}:8000"
+      # Loopback only: vLLM has no auth, and api reaches it over the compose network (http://vllm:8000).
+      - "127.0.0.1:${VLLM_PORT:-8001}:8000"
     volumes:
       - ${MODELS_DIR}:/models:ro
       - ${ADAPTERS_DIR}:/adapters:ro
@@ -18,11 +19,12 @@ services:
     # Base model is served as "exaone"; each LoRA adapter is selected
     # by its name in the request's "model" field.
     command: >
-      --model /models/exaone
+      --model /models/exaone-3.5-2.4b
       --served-model-name exaone
       --trust-remote-code
       --dtype half
       --max-model-len ${VLLM_MAX_MODEL_LEN:-4096}
+      --tokenizer /models/tokenizer
       --gpu-memory-utilization ${VLLM_GPU_UTIL:-0.85}
       --enable-lora
       --max-loras 3
@@ -53,12 +55,32 @@ services:
     restart: unless-stopped
 
     ports:
-      - "${AI_PORT:-8000}:8000"
+      # Loopback by default (not reachable from other machines). If the web server runs on another host,
+      # set AI_BIND in .env.server to this server's private IP (never 0.0.0.0 on a public interface).
+      - "${AI_BIND:-127.0.0.1}:${AI_PORT:-8000}:8000"
+
+    # Keep the downloaded embedding model across container rebuilds (it is fetched from Hugging Face on first start).
+    volumes:
+      - hf-cache:/root/.cache/huggingface
 
     environment:
       AI_MOCK_MODE: "${AI_MOCK_MODE:-false}"
       VLLM_BASE_URL: "${VLLM_BASE_URL:-http://vllm:8000/v1}"
+      VLLM_TIMEOUT: "${VLLM_TIMEOUT:-40}"
+
+      # RAG shared DB (read-only access, see ai/app/rag/retriever.py)
+      DB_HOST: "${DB_HOST:?set DB_HOST in .env.server}"
+      DB_PORT: "${DB_PORT:?set DB_PORT in .env.server}"
+      DB_USER: "${DB_USER:?set DB_USER in .env.server}"
+      DB_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD in .env.server}"
+      DB_NAME: "${DB_NAME:?set DB_NAME in .env.server}"
+      DB_SSLMODE: "${DB_SSLMODE:-require}"
+      DB_SSLNEGOTIATION: "${DB_SSLNEGOTIATION:-direct}"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-}"
 
     depends_on:
       vllm:
         condition: service_healthy
+
+volumes:
+  hf-cache:
