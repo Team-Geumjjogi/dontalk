@@ -97,6 +97,50 @@ nano .env.server
 - DB 5개 값은 비어 있으면 compose가 시작 전에 에러로 알려 줍니다(`required variable ... is missing a value`).
 - 비밀번호가 들어 있으므로 `.env.server`를 채팅·이슈·커밋에 붙여 넣지 마세요.
 
+### 3-4. 개발 PC에서 사전 검증 (서버에 올리기 전)
+
+api 이미지는 **서버에서 빌드**합니다(5장). 개발 PC에서 이미지를 만들어 서버로 전송하는 방식은 쓰지 않습니다. 전송해도 compose 파일·`.env.server`는 따로 옮겨야 하고, 어느 커밋으로 만든 이미지인지 추적이 어려우며, 임베딩 모델은 서버가 첫 시작 때 인터넷에서 내려받기 때문입니다. 대신 서버로 가져가기 전에 아래 중 가능한 검증을 개발 PC에서 해 둡니다.
+
+**A. Docker가 되는 PC: 이미지 빌드와 import 확인**
+
+```bash
+docker build -t dontalk-ai-test ./ai
+docker run --rm -e DB_HOST=h -e DB_PORT=1 -e DB_USER=u -e DB_PASSWORD=p -e DB_NAME=n \
+  dontalk-ai-test python -c "import app.main, app.rag.retriever; print('import ok')"
+```
+
+**B. Docker가 안 되는 PC: `requirements.txt`만으로 앱이 import되는지 확인**
+
+Dockerfile이 하는 일(CPU 전용 torch 먼저 설치 → `requirements.txt` 설치)을 깨끗한 가상환경에서 그대로 흉내 냅니다. 이 확인은 `requirements.txt`에서 빠진 패키지가 있는지 잡아냅니다. 루트의 `.venv`에는 모든 패키지가 깔려 있어서 `pytest`가 통과해도 이 누락은 드러나지 않습니다.
+
+```bash
+# 저장소 루트(dontalk/)에서. Windows는 python 경로가 Scripts\python.exe, Linux/macOS는 bin/python
+uv venv --python 3.12 /tmp/cleanvenv
+uv pip install --python /tmp/cleanvenv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python /tmp/cleanvenv/bin/python -r ai/requirements.txt
+
+# 커밋된 상태 그대로 확인하려면 HEAD를 따로 풀어서 실행
+mkdir /tmp/snap && git archive HEAD | tar -x -C /tmp/snap && cd /tmp/snap/ai
+AI_MOCK_MODE=false DB_HOST=h DB_PORT=1 DB_USER=u DB_PASSWORD=p DB_NAME=n \
+  /tmp/cleanvenv/bin/python -c "import app.main, app.rag.retriever, app.llm.vllm_client, app.services.chat_service; print('imports OK')"
+
+# Linux·Python 3.12 기준으로 의존성이 해석되는지 (설치 없이)
+uv pip compile ai/requirements.txt --python-platform x86_64-manylinux_2_28 --python-version 3.12 --quiet | head
+```
+
+**실행 결과 (2026-10-02, Windows 개발 PC, 커밋 `f5dedde` 기준)**
+
+| 확인 | 결과 |
+|---|---|
+| Linux·Python 3.12 의존성 해석 | 성공 (psycopg 3.3.6, pgvector 0.5.0, sentence-transformers 6.1.0) |
+| CPU torch를 먼저 설치한 뒤 `requirements.txt` 설치 | torch가 `2.14.1+cpu`로 유지됨. CUDA 빌드로 교체되지 않음 |
+| `app.main`, `app.rag.retriever`, `app.llm.vllm_client`, `app.services.chat_service` import | 성공 |
+
+**이 검증으로 알 수 없는 것**
+- `Dockerfile` 자체의 빌드 성공 여부(`COPY`, `CMD`, Linux 휠 설치). 서버에서 처음 `up --build` 할 때 확인합니다.
+- 임베딩 모델의 HuggingFace 다운로드와 로드, 공용 DB 접속.
+- 설치된 `transformers`가 5.18.0이라 팀의 `uv.lock`(5.8.1, `pyproject.toml`은 `<5.9`)과 다릅니다. import는 성공했지만 임베딩 모델 로드는 확인하지 않았습니다. 서버에서 `워밍업 실패`가 나오면 `requirements.txt`에 `transformers>=4.56,<5.9`를 추가해 `pyproject.toml`과 맞추세요.
+
 ## 4. 명령 편의 (alias)
 
 compose 파일 이름이 기본값(`docker-compose.yml`)이 아니라서 옵션이 매번 필요합니다. 폴더에는 로컬 개발용 `docker-compose.yml`도 있어서, 옵션 없이 실행하면 **다른 파일이 실행됩니다.**
@@ -255,6 +299,7 @@ sudo docker start exaone-vllm dontalk-ai
 | 모든 응답이 상담사 이관 | vLLM 연결 실패, 분야명 불일치, 컨텍스트 초과 | 응답의 `handoff_reason` 확인 (`LLM 오류: ...`) 후 `dcs logs api` |
 | `ValueError: 지원하지 않는 분야` | DB 분야명이 `은행/보험/증권`과 다름 | DB 값 확인 후 `ADAPTER_NAMES` 맞추기 |
 | `permission denied` (docker) | docker 그룹 미가입 | `sudo` 사용 |
+| (개발 PC) Docker Desktop을 켜도 `docker info`가 `500 Internal Server Error` | 로그에 "가상화가 활성화되지 않은 이 컴퓨터에서는 WSL2를 시작할 수 없습니다" → BIOS의 가상화(VT-x/SVM)가 꺼져 있거나 Windows의 '가상 머신 플랫폼'이 비활성 | BIOS에서 가상화를 켜고 `wsl --install --no-distribution` 후 재부팅. 어렵다면 3-4장의 B 방법으로 대체 검증하고 이미지 빌드는 서버에서 |
 
 ## 11. 운영 명령 모음
 
@@ -276,6 +321,6 @@ sudo docker system df           # 디스크 사용량
 
 - 서버 `models/` 폴더의 실제 구조와 compose 경로 일치 여부
 - EXAONE 3.5 + LoRA 조합의 vLLM 로드, healthcheck의 `curl` 존재 여부
-- api 이미지 빌드(CPU torch 설치 순서, `psycopg[binary]`) — 개발 PC에서 Docker가 꺼져 있어 빌드를 시도하지 못했습니다.
+- api 이미지 빌드 — 개발 PC에서는 가상화가 꺼져 있어 Docker 엔진이 시작되지 않아 빌드하지 못했습니다. 대신 3-4장 B 방법으로 `requirements.txt`의 의존성과 import는 확인했고(성공), Dockerfile 빌드와 Linux 휠 설치는 서버의 첫 빌드에서 확인합니다.
 - 다중턴(이전 대화를 프롬프트에 포함) 후속 질문의 실제 답변 품질
 - `VLLM_MAX_MODEL_LEN` 적정값 (9장 실측)
