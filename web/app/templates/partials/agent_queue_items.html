@@ -1,0 +1,30 @@
+{#- 상담사 대기 큐/완료 목록. agent_queue.html 이 include 하고, 자동 갱신(/agent/queue/items)도 이 조각만 다시 그린다.
+    필요한 값: tab, queue_items, selected -#}
+{% from "components/category_badge.html" import category_badge %}
+{% from "components/empty_state.html" import empty_state %}
+{% from "components/status_badge.html" import status_badge %}
+
+{% if not queue_items %}
+  {{ empty_state("대기 중인 상담이 없습니다" if tab == "waiting" else "완료한 상담이 없습니다",
+                 "새 상담이 접수되면 여기에 표시됩니다." if tab == "waiting" else "상담 메모를 저장해 종료한 상담이 여기에 쌓입니다.") }}
+{% endif %}
+<ul class="queue-list">
+  {% for item in queue_items %}
+    {% set c = item.consult %}
+    {% set is_selected = selected and selected.consult_id == c.consult_id %}
+    <li>
+      <a class="queue-item{{ ' queue-item--selected' if is_selected }}" href="{{ url_for('agent.queue', tab=tab if tab == 'done' else None, consult_id=c.consult_id) }}"
+         {%- if is_selected %} aria-current="true"{% endif %}>
+        <span class="queue-item__top">
+          <strong>{{ c.customer.name or "고객" }}</strong>
+          {{ status_badge(c) }}
+        </span>
+        <span class="queue-item__preview">{{ item.preview }}</span>
+        <span class="queue-item__bottom">
+          {{ category_badge(c.category) }}
+          <span class="queue-item__time">{{ (c.handoff_at if tab == "waiting" else c.closed_at)|kst }}</span>
+        </span>
+      </a>
+    </li>
+  {% endfor %}
+</ul>

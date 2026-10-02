@@ -1,0 +1,18 @@
+{#- AI 가 답변 근거로 참고한 과거 상담 사례(상담사 화면). 예상 꼬리질문/종합 답변을 접어서 보여준다.
+    sources: AI 응답의 sources 목록 [{snippet, topic, score, follow_up_question, output}, ...]
+    사용: {{ source_list(sources, limit=3) }} -#}
+{% macro source_list(sources, limit=3) %}
+<ul class="source-list">
+  {%- for s in sources[:limit] %}
+  <li class="source-list__item">
+    <details>
+      <summary><span class="source-list__question">{{ s.snippet }}</span> <span class="source-list__meta">{{ s.topic }} · 유사도 {{ (s.score * 100)|round|int }}%</span></summary>
+      <dl class="key-value source-list__detail">
+        <div class="key-value__row"><dt>예상 꼬리질문</dt><dd>{{ s.follow_up_question or "-" }}</dd></div>
+        <div class="key-value__row"><dt>예상 종합 답변</dt><dd class="source-list__output">{{ s.output or "-" }}</dd></div>
+      </dl>
+    </details>
+  </li>
+  {%- endfor %}
+</ul>
+{% endmacro %}

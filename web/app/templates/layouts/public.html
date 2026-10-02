@@ -1,0 +1,14 @@
+{#- 로그인 전 공개 화면(랜딩, 로그인)의 레이아웃: 상단바(로고 + header_actions) + 본문(content). -#}
+{% extends "layouts/base.html" %}
+{% from "components/site_header.html" import site_header %}
+
+{% block layout_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layouts/public.css') }}">
+{% endblock %}
+
+{% block body %}
+  {% call site_header() %}{% block header_actions %}{% endblock %}{% endcall %}
+  <main class="public-main">
+    {% block content %}{% endblock %}
+  </main>
+{% endblock %}

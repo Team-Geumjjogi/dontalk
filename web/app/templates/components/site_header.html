@@ -1,0 +1,11 @@
+{#- 상단바: 왼쪽 로고, 오른쪽에 {% call %} 블록으로 넣은 버튼들. bordered=True 면 흰 배경 + 아래 선(업무 화면용), fluid=True 면 화면 전체 폭.
+    사용: {% call site_header() %}{{ button("로그인", href="/login", variant="secondary", size="sm") }}{% endcall %} -#}
+{% from "components/brand.html" import brand %}
+{% macro site_header(bordered=False, fluid=False) %}
+<header class="site-header{{ ' site-header--bordered' if bordered }}">
+  <div class="container{{ ' container--fluid' if fluid }} site-header__inner">
+    {{ brand() }}
+    <nav class="site-header__actions" aria-label="바로가기">{{ caller() if caller }}</nav>
+  </div>
+</header>
+{% endmacro %}

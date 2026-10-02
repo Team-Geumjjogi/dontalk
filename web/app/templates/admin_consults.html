@@ -1,0 +1,62 @@
+{#- 관리자: 상담 이력 목록. 분야/상태/상담사/기간 필터 + 페이지 이동. 행의 고객 이름을 누르면 채팅 기록 상세. -#}
+{% extends "layouts/staff.html" %}
+{% from "components/badge.html" import badge %}
+{% from "components/button.html" import button %}
+{% from "components/category_badge.html" import category_badge %}
+{% from "components/empty_state.html" import empty_state %}
+{% from "components/field.html" import field %}
+{% from "components/pagination.html" import pagination_nav %}
+{% from "components/select.html" import select %}
+{% from "components/status_badge.html" import status_badge %}
+
+{% block title %}돈톡 — 상담 이력{% endblock %}
+
+{% block page_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin container">
+  <h1 class="staff-title">상담 이력</h1>
+
+  <form class="card filters" method="get" action="{{ url_for('admin.consults') }}">
+    {{ select("category", "분야", [("all", "전체"), ("은행", "은행"), ("보험", "보험"), ("증권", "증권"), ("unclassified", "미분류")], selected=filters.category) }}
+    {{ select("status", "상태", [("all", "전체"), ("chatting", "상담 중"), ("ended", "AI 상담 종료"), ("waiting", "상담사 대기"), ("completed", "상담 완료")], selected=filters.status) }}
+    {{ select("agent", "담당 상담사", agent_options, selected=filters.agent or "") }}
+    {{ field("date_from", "접수일(부터)", type="date", value=filters.date_from) }}
+    {{ field("date_to", "접수일(까지)", type="date", value=filters.date_to) }}
+    <div class="filters__actions">
+      {{ button("조회", type="submit") }}
+      {{ button("초기화", href=url_for("admin.consults"), variant="secondary") }}
+    </div>
+  </form>
+
+  <div class="card table-card">
+    {% if not pagination.items %}
+      {{ empty_state("조건에 맞는 상담이 없습니다", "필터를 바꾸거나 초기화해 보세요.") }}
+    {% else %}
+      <table class="table">
+        <thead>
+          <tr><th scope="col">접수 시각</th><th scope="col">고객</th><th scope="col">첫 문의</th><th scope="col">분야</th><th scope="col">상태</th><th scope="col">담당 상담사</th><th scope="col">만족도</th><th scope="col">이관 사유</th></tr>
+        </thead>
+        <tbody>
+          {% for c in pagination.items %}
+            <tr>
+              <td class="table__time">{{ c.created_at|kst }}</td>
+              <td><a href="{{ url_for('admin.consult_detail', consult_id=c.consult_id) }}"><strong>{{ c.customer.name or "고객" }}</strong></a></td>
+              <td class="table__preview">{{ c.first_question|truncate(36, True, "…") }}</td>
+              <td>{{ category_badge(c.category) }}{% if c.transfers %} {{ badge("재배정", tone="warning") }}{% endif %}</td>
+              <td>{{ status_badge(c) }}</td>
+              <td>{{ c.employee.name if c.employee else "-" }}</td>
+              <td>{{ c.satisfaction.label if c.satisfaction else "-" }}</td>
+              <td>{{ c.handoff_reason.label if c.handoff_reason and c.handoff_at else "-" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+
+  {{ pagination_nav(pagination, "admin.consults", params) }}
+</div>
+{% endblock %}

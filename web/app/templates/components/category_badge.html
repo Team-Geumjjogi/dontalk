@@ -1,0 +1,5 @@
+{#- 분야 배지. 분야가 없으면(AI가 분류하지 못함) 보라색 "미분류". 사용: {{ category_badge(consult.category) }} -#}
+{% from "components/badge.html" import badge %}
+{% macro category_badge(category) %}
+{{- badge(category, tone="neutral") if category else badge("미분류", tone="violet") -}}
+{% endmacro %}

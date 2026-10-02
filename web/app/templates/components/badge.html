@@ -1,0 +1,3 @@
+{#- 상태 배지. tone: neutral | success | warning | info | violet | danger
+    사용: {{ badge("대기중", tone="warning") }} -#}
+{% macro badge(text, tone="neutral") %}<span class="badge badge--{{ tone }}">{{ text }}</span>{% endmacro %}

@@ -1,0 +1,58 @@
+{#- 관리자: 상담 1건 상세(읽기 전용). 채팅 기록, AI 분석, 이관 이력, 상담사 메모. -#}
+{% extends "layouts/staff.html" %}
+{% from "components/button.html" import button %}
+{% from "components/card.html" import card %}
+{% from "components/category_badge.html" import category_badge %}
+{% from "components/consult_analysis.html" import consult_analysis %}
+{% from "components/conversation.html" import conversation %}
+{% from "components/key_value.html" import key_value %}
+{% from "components/source_list.html" import source_list %}
+{% from "components/status_badge.html" import status_badge %}
+{% from "components/transfer_log.html" import transfer_log %}
+
+{% block title %}돈톡 — 상담 상세{% endblock %}
+
+{% block page_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin container">
+  <p class="admin__back">{{ button("← 상담 이력", href=url_for("admin.consults"), variant="ghost", size="sm") }}</p>
+
+  <header class="admin__detail-header">
+    <h1 class="staff-title">{{ consult.customer.name or "고객" }} 상담</h1>
+    {{ category_badge(consult.category) }}
+    {{ status_badge(consult) }}
+  </header>
+
+  <div class="admin__detail-grid">
+    {% call card(title="상담 정보") %}
+      {{ key_value([
+        ("접수(생성)", consult.created_at|kst),
+        ("상담사 연결 접수", consult.handoff_at|kst if consult.handoff_at else None),
+        ("접수 방식", {"realtime": "실시간", "next_day": "예약"}[consult.queue_type.value] if consult.queue_type else None),
+        ("종료 시각", consult.closed_at|kst if consult.closed_at else None),
+        ("담당 상담사", consult.employee.name ~ " (" ~ consult.employee.department ~ ")" if consult.employee else None),
+        ("만족도", consult.satisfaction.label if consult.satisfaction else None),
+      ]) }}
+    {% endcall %}
+    {{ consult_analysis(consult) }}
+  </div>
+
+  {% if consult.summary %}
+    {% call card(title="상담사 메모") %}<span class="prewrap">{{ consult.summary }}</span>{% endcall %}
+  {% endif %}
+
+  {% call card(title="대화 내역") %}{{ conversation(consult.messages) if consult.messages else "대화가 없습니다." }}{% endcall %}
+
+  {% set ai_sources = consult.messages|selectattr("sources")|map(attribute="sources")|list %}
+  {% if ai_sources %}
+    {% call card(title="AI가 참고한 상담 사례") %}{{ source_list(ai_sources[-1]) }}{% endcall %}
+  {% endif %}
+
+  {% if consult.transfers %}
+    {% call card(title="분야 이관 이력") %}{{ transfer_log(consult.transfers) }}{% endcall %}
+  {% endif %}
+</div>
+{% endblock %}

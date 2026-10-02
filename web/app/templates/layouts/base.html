@@ -1,0 +1,21 @@
+{#- 모든 페이지의 뼈대. 폰트(Pretendard)와 공통 CSS 를 불러오고, 페이지는 아래 블록만 채운다.
+    title: 탭 제목   layout_css: 레이아웃 CSS   page_css: 페이지 전용 CSS   body_class: <body> 클래스   body: 본문   scripts: 페이지 전용 JS -#}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}돈톡 DonTalk{% endblock %}</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  {%- block layout_css %}{% endblock %}
+  {%- block page_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {%- block body %}{% endblock %}
+  {%- block scripts %}{% endblock %}
+</body>
+</html>

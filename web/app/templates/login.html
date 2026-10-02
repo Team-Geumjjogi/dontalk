@@ -1,25 +1,31 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>돈톡 — 상담사/관리자 로그인</title>
-  <style>
-    body { font-family: sans-serif; max-width: 360px; margin: 80px auto; padding: 0 12px; }
-    h2 { text-align: center; }
-    form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-    input { padding: 10px; font-size: 14px; }
-    button { padding: 10px; font-size: 14px; cursor: pointer; }
-    .error { color: #c0392b; font-size: 13px; text-align: center; }
-  </style>
-</head>
-<body>
-  <h2>돈톡 상담사/관리자 로그인</h2>
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <form method="post">
-    <input type="email" name="email" placeholder="이메일" required autofocus>
-    <input type="password" name="password" placeholder="비밀번호" required>
-    <button type="submit">로그인</button>
-  </form>
-</body>
-</html>
+{#- 상담사/관리자 로그인. 고객은 로그인이 없으므로 "고객 상담으로" 돌아가는 길을 상단에 둔다. -#}
+{% extends "layouts/public.html" %}
+{% from "components/alert.html" import alert %}
+{% from "components/button.html" import button %}
+{% from "components/field.html" import field %}
+
+{% block title %}돈톡 — 상담사·관리자 로그인{% endblock %}
+
+{% block page_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/login.css') }}">
+{% endblock %}
+
+{% block header_actions %}
+  {{ button("← 고객 상담으로", href=url_for("main.landing"), variant="ghost", size="sm") }}
+{% endblock %}
+
+{% block content %}
+  <div class="auth container">
+    <section class="card auth__card">
+      <h1 class="auth__title">상담사·관리자 로그인</h1>
+      <p class="auth__lead">발급받은 계정으로 로그인해 주세요.</p>
+
+      <form class="stack" method="post">
+        {% if error %}{{ alert(error) }}{% endif %}
+        {{ field("email", "이메일", type="email", value=email or "", placeholder="name@dontalk.com", required=True, autofocus=not email, autocomplete="username") }}
+        {{ field("password", "비밀번호", type="password", required=True, autofocus=(email or "")|length > 0, autocomplete="current-password") }}
+        {{ button("로그인", type="submit", size="lg", block=True) }}
+      </form>
+    </section>
+  </div>
+{% endblock %}

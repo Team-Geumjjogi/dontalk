@@ -13,8 +13,8 @@
 ## 폴더 구조
 | 폴더 | 무엇을 | 리뷰 |
 |---|---|---|
-| `web/` | Flask 웹 서버 (채팅 화면, 로그인, 상담사 이관) | PR 1명 승인 |
-| `ai/` | FastAPI AI 서버 (RAG, LLM, 분야 판단) | PR 1명 승인 |
+| `web/` | Flask 웹 서버 (고객 채팅, 상담사/관리자 화면) | PR 1명 승인 |
+| `ai/` | FastAPI AI 서버 (RAG 검색, LLM, 분야 판단, 이관 판단) | PR 1명 승인 |
 | `ml/` | 데이터 가공, LLM 학습, 평가 스크립트 | PR 1명 승인 |
 | `playground/이름/` | **개인 실험실** (노트북, 메모, 시도해본 것 자유롭게) | 필요 없음 |
 | `experiments/` | **팀 공식 실험 기록** (`LOG.md`에 한 줄씩) | PR 1명 승인 |
@@ -28,25 +28,28 @@
 git clone https://github.com/Team-geumjjogi/dontalk.git
 cd dontalk
 
-python3 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-
-pip install -r requirements-dev.txt
-nbstripout --install                 # 노트북 출력 자동 제거 (1회)
-cp .env.example .env                 # 환경변수 파일 만들기
+uv sync                              # 의존성 설치 (루트 pyproject.toml/uv.lock 하나로 통합. 각자 uv init 금지)
+uv run nbstripout --install          # 노트북 출력 자동 제거 (1회)
+cp .env.example .env                 # 환경변수 파일 만들기 → DB_* 등 값은 팀원에게 받아서 채우기
 ```
 
-## 실행 (mock 모드: 실제 모델 없이 화면/흐름 확인)
-터미널 2개가 필요합니다.
+## 실행
+서비스는 **서버 3개**입니다 (각각 별도 터미널, 아래 순서대로). `.env`에 공용 DB 접속 정보(`DB_*`)가 필요합니다.
 ```bash
-# 터미널 1 - AI 서버
-cd ai && pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000        # http://localhost:8000/docs
+# 1) Ollama (LLM) - 앱을 켜 두고, 모델이 있는지 확인. 없으면 `ollama pull exaone3.5:2.4b`
+ollama list
 
-# 터미널 2 - 웹 서버
-cd web && pip install -r requirements.txt
-flask --app app run --debug --port 5001          # http://localhost:5001
+# 2) AI 서버 (RAG 검색 + LLM). .env 의 AI_MOCK_MODE=false 여야 실제 모델을 씁니다. 시작 후 20~30초는 워밍업.
+cd ai && uv run uvicorn app.main:app --port 8000
+curl localhost:8000/health                       # {"status":"ok","mock_mode":false}
+
+# 3) 웹 서버
+cd web && uv run flask --app app run --debug --port 5001     # http://localhost:5001
 ```
+- `AI_MOCK_MODE=true` 로 두면 모델/DB 없이 가짜 응답으로 화면만 확인할 수 있습니다 (1, 2번 없이도 웹 개발 가능).
+- 웹 로그인 계정(상담사/관리자)은 회원가입이 없고 CLI로 만듭니다: `cd web && flask --app app create-employee --name 김서연 --email agent1@dontalk.com --password test1234 --role agent --department 은행` (관리자는 `--role admin`, `--department` 생략).
+- 웹 DB 테이블 구조를 바꿨다면 `cd web && flask --app app reset-db --yes` (웹 전용 테이블만 재생성, 지식베이스는 그대로). 구조는 [`docs/web-db-schema.md`](docs/web-db-schema.md).
+- 테스트: `cd web && uv run python -m pytest -q` , `cd ai && uv run python -m pytest -q`
 > ⚠ **실행 위치가 중요합니다.** 위 명령은 각각 `ai/`, `web/` 폴더 안에서 실행해야 합니다.
 
 ## 데이터 (AI-Hub 「금융분야 고객상담 데이터」)
@@ -62,10 +65,10 @@ python -m ml.data.build_sft_dataset
 
 ## 팀 규칙 (요약)
 1. `main`에 직접 작업하지 않습니다. 브랜치를 만들고 Pull Request로 합칩니다. → [`docs/git-guide.md`](docs/git-guide.md)
-2. 브랜치 이름: `이름/주제` (예: `eunje/mini-rag`)
+2. 브랜치 이름: `주제/이름` (예: `mini-rag/eunje`)
 3. 데이터·모델 파일·`.env`(비밀키)는 절대 커밋하지 않습니다.
 4. 실험을 했다면 성공/실패와 상관없이 `experiments/LOG.md`에 한 줄 남깁니다.
 5. Colab은 계정이 1개입니다. → [`docs/colab-guide.md`](docs/colab-guide.md)
 
 ## 문서
-- [Git 사용 가이드](docs/git-guide.md) · [데이터 스키마](docs/data-schema.md) · [API 명세](docs/api-spec.md) · [Colab 가이드](docs/colab-guide.md)
+- [Git 사용 가이드](docs/git-guide.md) · [데이터 스키마](docs/data-schema.md) · [API 명세](docs/api-spec.md) · [웹 DB 스키마](docs/web-db-schema.md) · [Colab 가이드](docs/colab-guide.md)
