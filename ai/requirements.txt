@@ -3,7 +3,8 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 python-dotenv>=1.0
 httpx>=0.28.1
-# --- RAG 구현 시 아래 주석 해제 (임베딩 모델 확정 후) ---
-# sentence-transformers
-# faiss-cpu
-# numpy
+# --- RAG (app/rag/retriever.py) ---
+psycopg[binary]>=3.3.6
+pgvector>=0.5.0
+# torch is installed CPU-only in the Dockerfile before this file, so this does not pull the CUDA build
+sentence-transformers>=6.1.0
