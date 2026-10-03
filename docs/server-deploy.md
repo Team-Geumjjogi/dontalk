@@ -8,7 +8,7 @@ GPU 서버(RTX 3060, WSL2 Ubuntu)에서 vLLM(모델 + LoRA 어댑터)과 AI API(
 ```
 웹(Flask) ──HTTP──▶ api (FastAPI, dontalk-ai)  ──compose 내부망──▶ vllm (dontalk-vllm)
                       │                                              ├─ base: exaone (EXAONE-3.5-2.4B)
-                      └─ 공용 DB (RAG 검색, 읽기 전용)                  └─ LoRA: bank / insurance / securities
+                      └─ 공용 DB (RAG 검색, 읽기 전용)                  └─ LoRA: bank / insurance / stock
 ```
 
 | 서비스 | 컨테이너 | 하는 일 | 호스트 포트 |
@@ -17,7 +17,7 @@ GPU 서버(RTX 3060, WSL2 Ubuntu)에서 vLLM(모델 + LoRA 어댑터)과 AI API(
 | `api` | `dontalk-ai` | RAG 검색 → 분야 판단 → vLLM 호출 → 답변 정리/이관 판단 | `AI_BIND:8000` (기본 `127.0.0.1`) |
 
 - api는 `http://vllm:8000/v1`(compose 내부망)로 vLLM에 접근합니다. 그래서 vLLM 호스트 포트는 디버깅용 `curl`에만 쓰입니다.
-- 분야(은행/보험/증권)에 따라 요청의 `model` 필드로 어댑터(`bank`/`insurance`/`securities`)를 고릅니다.
+- 분야(은행/보험/증권)에 따라 요청의 `model` 필드로 어댑터(`bank`/`insurance`/`stock`)를 고릅니다.
 - 시스템 프롬프트는 어댑터 학습 때와 같은 문구(`ai/app/llm/prompts.py`)여야 해서 임의로 바꾸면 안 됩니다.
 
 ## 2. 서버의 기존 상태 (2026-10-02 확인)
@@ -58,7 +58,7 @@ $MODELS_DIR/
 $ADAPTERS_DIR/
 ├── bank/                # adapter_config.json, adapter_model.safetensors
 ├── insurance/
-└── securities/
+└── stock/
 ```
 
 > (미검증) 위 폴더 구조는 "models 안에 exaone-3.5-2.4b, tokenizer, adapters가 있다"는 전달 내용과 compose의 현재 경로를 바탕으로 한 것입니다. 실제 구조는 5장의 백업 명령(`inspect`, `ls`)으로 확인하고, 다르면 compose의 `--model`, `--tokenizer`, `volumes`를 맞추세요.
@@ -205,9 +205,9 @@ dcs ps
 
 | # | 확인 | 명령 | 기대 결과 |
 |---|---|---|---|
-| 1 | vLLM 기동 | `dcs logs -f vllm` | 에러 없이 `Application startup complete`. LoRA 3개(bank, insurance, securities) 로드 메시지 |
+| 1 | vLLM 기동 | `dcs logs -f vllm` | 에러 없이 `Application startup complete`. LoRA 3개(bank, insurance, stock) 로드 메시지 |
 | 2 | vLLM 상태 | `dcs ps` | `dontalk-vllm`이 `healthy` |
-| 3 | 모델 목록 | `curl -s localhost:8001/v1/models` | `exaone`, `bank`, `insurance`, `securities` |
+| 3 | 모델 목록 | `curl -s localhost:8001/v1/models` | `exaone`, `bank`, `insurance`, `stock` |
 | 4 | api 기동 | `dcs logs api` | `워밍업 완료`. 실패 시 DB 접속 정보 또는 임베딩 모델 다운로드(인터넷 필요) 문제 |
 | 5 | api 상태 | `curl -s localhost:8000/health` | 정상 응답 |
 | 6 | 어댑터 직접 호출 | 아래 `curl` | 한국어 답변 |
