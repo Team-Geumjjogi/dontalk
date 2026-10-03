@@ -1,0 +1,10 @@
+{#- 숫자 지표 카드. 사용: {{ stat_card("오늘 전체 상담", "3건", note="AI 단독 해결 1건") }} -#}
+{% macro stat_card(label, value, note=None) %}
+<section class="stat-card">
+  <p class="stat-card__label">{{ label }}</p>
+  <p class="stat-card__value">{{ value }}</p>
+  {%- if note %}
+  <p class="stat-card__note">{{ note }}</p>
+  {%- endif %}
+</section>
+{% endmacro %}

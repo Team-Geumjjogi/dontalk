@@ -1,0 +1,31 @@
+/* 관리자 대시보드 */
+.admin__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+.admin__panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+@media (max-width: 52rem) { .admin__panels { grid-template-columns: 1fr; } }
+
+.log-list { margin: 0; padding: 0; list-style: none; }
+.log-list__item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+.log-list__item:last-child { border-bottom: 0; }
+.log-list__time { margin-left: auto; color: var(--color-text-muted); font-size: var(--text-xs); white-space: nowrap; }
+
+/* --- 상담 이력 --- */
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--space-4); align-items: end; margin-bottom: var(--space-5); }
+.filters__actions { display: flex; gap: var(--space-2); }
+.table-card { padding: var(--space-2) var(--space-4); overflow-x: auto; }
+
+/* --- 상담 상세 --- */
+.admin__back { margin: calc(var(--space-2) * -1) 0 var(--space-2) calc(var(--space-3) * -1); }
+.admin__detail-header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-5); }
+.admin__detail-header .staff-title { margin-bottom: 0; }
+.admin__detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); }
+.admin > .card + .card { margin-top: var(--space-4); }   /* 세로로 쌓인 카드 사이 간격 (격자 안의 카드는 제외) */
+@media (max-width: 52rem) { .admin__detail-grid { grid-template-columns: 1fr; } }
+
+/* --- 분야 이관 이력 / AI 분류 정확도 --- */
+.transfer-log { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-3); }
+.transfer-log__meta { margin-left: var(--space-2); color: var(--color-text-muted); font-size: var(--text-sm); }
+.transfer-log__reason { margin-top: var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); }
+.admin__summary { margin-bottom: var(--space-4); line-height: var(--leading-relaxed); }
+.admin__note { margin-top: var(--space-4); color: var(--color-text-muted); font-size: var(--text-sm); }
+.admin__panels + .card { margin-top: var(--space-4); }
+.table__preview { max-width: 18rem; color: var(--color-text-muted); font-size: var(--text-sm); }

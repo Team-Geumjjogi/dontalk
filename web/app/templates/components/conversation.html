@@ -1,0 +1,12 @@
+{#- 상담 대화 내역(읽기 전용, 상담사/관리자 화면). 줄바꿈을 그대로 보여준다.
+    사용: {{ conversation(consult.messages) }}  (messages 의 sender 는 customer / ai) -#}
+{% macro conversation(messages) %}
+<ol class="conversation">
+  {%- for m in messages %}
+  <li class="conversation__item conversation__item--{{ m.sender.value }}">
+    <span class="conversation__sender">{{ "고객" if m.sender.value == "customer" else "AI" }}</span>
+    <p class="conversation__text">{{ m.content }}</p>
+  </li>
+  {%- endfor %}
+</ol>
+{% endmacro %}

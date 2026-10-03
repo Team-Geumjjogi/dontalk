@@ -1,0 +1,13 @@
+{#- 모달(<dialog>). 열고 닫기는 JS 의 showModal() / close(). 안쪽 내용(입력창, 버튼)은 {% call %} 블록으로 넣는다.
+    제목/설명은 JS 로 바꿀 수 있게 id 가 "<id>-title", "<id>-text" 로 붙는다.
+    사용: {% call modal("modal-end", "상담을 종료할까요?", text="…") %}<div class="modal__actions">…</div>{% endcall %} -#}
+{% macro modal(id, title, text="", icon=None) %}
+<dialog class="modal" id="{{ id }}" aria-labelledby="{{ id }}-title">
+  {%- if icon %}
+  <div class="modal__icon" aria-hidden="true">{{ icon }}</div>
+  {%- endif %}
+  <h2 class="modal__title" id="{{ id }}-title">{{ title }}</h2>
+  <p class="modal__text" id="{{ id }}-text">{{ text }}</p>
+  {{ caller() if caller }}
+</dialog>
+{% endmacro %}

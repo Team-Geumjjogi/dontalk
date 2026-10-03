@@ -1,0 +1,16 @@
+{#- AI 분석 결과 카드(상담사/관리자 상세 공통). 분류 분야, AI가 처음 판단한 분야, 주제, 신뢰도, 이관 사유.
+    사용: {{ consult_analysis(consult) }} -#}
+{% from "components/card.html" import card %}
+{% from "components/key_value.html" import key_value %}
+{% macro consult_analysis(consult) %}
+{% call card(title="AI 분석 결과", tone="accent") %}
+  {{ key_value([
+    ("분류 분야", consult.category or "미분류"),
+    ("AI 판단", (consult.ai_category or "미분류") if consult.handoff_at else None),
+    ("주제", consult.topic),
+    ("신뢰도", (consult.confidence * 100)|round|int ~ "%" if consult.confidence is not none else None),
+    ("이관 사유", consult.handoff_reason.label if consult.handoff_reason else None),
+    ("상세", consult.handoff_detail),
+  ]) }}
+{% endcall %}
+{% endmacro %}

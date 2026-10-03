@@ -1,1 +1,13 @@
-# 후순위: 이번 프로젝트는 venv로 진행합니다. 시간이 남으면 작성하세요.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+# The embedding model runs on CPU (vLLM owns the GPU), so install CPU-only torch first to keep the image small.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

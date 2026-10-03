@@ -1,0 +1,9 @@
+{#- 링크형 탭. items 는 (키, 표시, 주소) 목록, active 는 현재 키.
+    사용: {{ tabs([("waiting", "대기 3", url_for("agent.queue")), ("done", "내 완료", url_for("agent.queue", tab="done"))], "waiting") }} -#}
+{% macro tabs(items, active) %}
+<nav class="tabs" aria-label="목록 전환">
+  {%- for key, label, href in items %}
+  <a class="tabs__item{{ ' tabs__item--active' if key == active }}" data-tab="{{ key }}" href="{{ href }}"{% if key == active %} aria-current="page"{% endif %}>{{ label }}</a>
+  {%- endfor %}
+</nav>
+{% endmacro %}

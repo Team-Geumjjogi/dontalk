@@ -1,0 +1,117 @@
+/* 고객 채팅 화면: 가운데 정렬된 웹 채팅 창. 휴대폰 폭에서는 화면 전체를 쓴다. */
+.chat-page {
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-4);
+}
+
+.chat {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: 46rem;
+  height: calc(100dvh - var(--space-8));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+.chat__actions { display: flex; gap: var(--space-2); }
+
+.chat__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* --- 대화 영역 --- */
+.chat__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
+.bubble-row { display: flex; }
+.bubble-row--me { justify-content: flex-end; }
+.bubble {
+  max-width: 82%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 1.125rem;
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;   /* AI 답변의 줄바꿈 유지 */
+}
+.bubble--ai { background: var(--color-surface); border: 1px solid var(--color-border); border-top-left-radius: 0.25rem; }
+.bubble--me { background: var(--color-accent); color: var(--color-on-accent); border-top-right-radius: 0.25rem; }
+.bubble--error { background: var(--tone-danger-bg); border-color: transparent; color: var(--tone-danger-fg); }
+
+/* 답변을 기다리는 동안 보이는 점 세 개 */
+.typing { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 1.5rem; }
+.typing__dot {
+  width: 0.5rem; height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing__dot:nth-child(3) { animation-delay: 0.15s; }
+.typing__dot:nth-child(4) { animation-delay: 0.3s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-0.3rem); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing__dot { animation: none; opacity: 0.7; }
+}
+
+/* 예시 질문 */
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+.chip:hover { background: var(--color-accent-soft); }
+
+/* --- 입력 영역 --- */
+.chat__composer {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.chat__input { flex: 1; min-width: 0; }
+.chat__composer:has(input:disabled) { opacity: 0.7; }
+
+/* 모달 안 보조 문구 */
+.modal__hint { margin-top: var(--space-3); color: var(--color-text-muted); font-size: var(--text-xs); }
+
+@media (max-width: 40rem) {
+  .chat-page { padding: 0; }
+  .chat { height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+  .chat__header { padding-inline: var(--space-4); }
+  .bubble { max-width: 90%; }
+}

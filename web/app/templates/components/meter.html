@@ -1,0 +1,8 @@
+{#- 비율 막대(<progress> 사용: 스크린리더가 값을 읽어준다). 사용: {{ meter("은행", 12, 40.0) }} -#}
+{% macro meter(label, count, percent) %}
+<div class="meter">
+  <span class="meter__label">{{ label }}</span>
+  <progress class="meter__bar" value="{{ percent }}" max="100" aria-label="{{ label }} 비중">{{ percent }}%</progress>
+  <span class="meter__value">{{ count }}건 ({{ percent }}%)</span>
+</div>
+{% endmacro %}

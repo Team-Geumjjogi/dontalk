@@ -1,0 +1,23 @@
+/* 상담사/관리자 로그인 페이지 */
+.auth {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--space-8);
+}
+.auth__card {
+  width: 100%;
+  max-width: 26rem;
+  padding: var(--space-8);
+  box-shadow: var(--shadow-md);
+}
+.auth__title {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.auth__lead {
+  margin-bottom: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}

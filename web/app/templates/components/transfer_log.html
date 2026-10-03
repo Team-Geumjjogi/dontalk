@@ -1,0 +1,12 @@
+{#- 분야 재배정(이관) 이력. 사용: {{ transfer_log(consult.transfers) }} -#}
+{% macro transfer_log(transfers) %}
+<ol class="transfer-log">
+  {%- for t in transfers %}
+  <li class="transfer-log__item">
+    <strong>{{ t.from_category }} → {{ t.to_category }}</strong>
+    <span class="transfer-log__meta">{{ t.employee.name }} · {{ t.created_at|kst }}</span>
+    {%- if t.reason %}<p class="transfer-log__reason">{{ t.reason }}</p>{% endif %}
+  </li>
+  {%- endfor %}
+</ol>
+{% endmacro %}

@@ -1,0 +1,12 @@
+{#- 로고(아이콘 + 이름). 클릭하면 첫 화면으로.
+    사용: {% from "components/brand.html" import brand %}  {{ brand() }} -#}
+{% macro brand(href=None) %}
+<a class="brand" href="{{ href or url_for('main.landing') }}" aria-label="돈톡 DonTalk 첫 화면">
+  <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <rect class="brand__mark-bg" width="32" height="32" rx="9"/>
+    <rect class="brand__mark-fg" x="8" y="8" width="16" height="12" rx="3.5"/>
+    <path class="brand__mark-fg" d="M12 19v5.5l5.5-5.5z"/>
+  </svg>
+  <span>돈톡</span>
+</a>
+{% endmacro %}

@@ -7,24 +7,65 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask
+from sqlalchemy.engine import URL
 
 from app.extensions import db, login_manager
+from app.services.business_hours import format_kst
 
 load_dotenv()
 
 
-def create_app() -> Flask:
+def _database_uri() -> URL:
+    """웹 전용 테이블(customer/consult/employee/message)은 팀 공용 DB(.env 의 DB_*)에 둔다.
+
+    같은 DB 안에 RAG 지식베이스(financial_consulting_qa)도 있지만 테이블이 다르다. 이전의 로컬 DB(POSTGRES_*, DATABASE_URL)는 쓰지 않는다.
+    psycopg(v3) 드라이버를 쓰고, 비밀번호에 특수문자가 있어도 안전하도록 문자열이 아니라 URL 객체로 조립한다.
+    """
+    missing = [k for k in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME") if not os.getenv(k)]
+    if missing:
+        raise RuntimeError(f".env 에 공용 DB 접속 정보가 없습니다: {', '.join(missing)}")
+    query = {"sslmode": os.getenv("DB_SSLMODE", "require")}
+    if os.getenv("DB_SSLNEGOTIATION", "direct"):
+        query["sslnegotiation"] = os.getenv("DB_SSLNEGOTIATION", "direct")
+    return URL.create(
+        "postgresql+psycopg",
+        username=os.environ["DB_USER"], password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"], port=int(os.environ["DB_PORT"]), database=os.environ["DB_NAME"],
+        query=query,
+    )
+
+
+def _engine_options() -> dict:
+    """원격 공용 DB 연결이 Wi-Fi 변경/절전/서버 쪽 정리로 조용히 끊겨도 요청이 멈추지 않게 하는 연결 옵션.
+    - pool_pre_ping/pool_recycle: 오래 놀던 연결은 쓰기 전에 확인하거나 새로 만든다
+    - keepalive/tcp_user_timeout: 응답 없는 연결을 30초 안팎(Linux 는 15초)에 에러로 끝낸다
+    - statement_timeout: 서버 쪽에서 오래 걸리는 쿼리를 중단 (기본 15초)
+    """
+    return {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "connect_args": {
+            "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+            "keepalives": 1, "keepalives_idle": 15, "keepalives_interval": 5, "keepalives_count": 3,
+            "tcp_user_timeout": 15000,
+            "options": f"-c statement_timeout={int(os.getenv('WEB_DB_STATEMENT_TIMEOUT', '15')) * 1000}",
+        },
+    }
+
+
+def create_app(database_uri: str | None = None) -> Flask:
+    """database_uri: 테스트에서 공용 DB 대신 임시 DB(sqlite 등)를 쓰려고 직접 넘기는 용도. 보통은 비워둔다."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-only-change-me")
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # 다른 사이트에서 보낸 POST 에는 세션 쿠키가 안 붙게 해서 CSRF 를 줄인다
     app.config["AI_SERVER_URL"] = os.getenv("AI_SERVER_URL", "http://localhost:8000")
 
-    # DATABASE_URL은 docker-compose로 띄운 pgvector용 Postgres를 그대로 재사용한다 (AI 쪽과 같은 DB, 다른 테이블).
-    # psycopg2가 아니라 psycopg(v3)를 쓰고 있어서, SQLAlchemy가 psycopg3 드라이버를 쓰도록 스킴을 바꿔준다.
-    database_url = os.getenv("DATABASE_URL", "")
-    if database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_uri or _database_uri()
+    # 공용 DB(postgres)에는 끊김 대비 옵션을 쓰고, 테스트용 임시 DB(sqlite 등)에는 기본 옵션만 쓴다
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_options() if database_uri is None else {"pool_pre_ping": True}
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    app.jinja_env.filters["kst"] = format_kst  # {{ consult.created_at|kst }}
 
     db.init_app(app)
 
@@ -32,7 +73,7 @@ def create_app() -> Flask:
 
     with app.app_context():
         # Spring의 ddl-auto: update 와 같은 방식 — 모델에 정의됐는데 DB에 없는 테이블만 만들어준다.
-        # 이미 있는 테이블(document_chunk 포함)은 절대 건드리지 않고, 기존 테이블의 컬럼 변경도 감지하지 않는다
+        # 이미 있는 테이블(financial_consulting_qa 포함)은 절대 건드리지 않고, 기존 테이블의 컬럼 변경도 감지하지 않는다
         # (컬럼을 바꿨다면 개발 단계에선 그냥 테이블을 지우고 다시 만드는 게 제일 간단하다).
         db.create_all()
 
@@ -44,10 +85,11 @@ def create_app() -> Flask:
     @login_manager.user_loader
     def load_user(employee_id: str):
         # 세션에 저장된 id로 실제 Employee row를 다시 불러오는 콜백 (Spring의 UserDetailsService.loadUserByUsername 과 같은 역할)
-        return models.Employee.query.get(int(employee_id))
+        return db.session.get(models.Employee, int(employee_id))
 
-    from app.routes import admin, agent, auth, chat
+    from app.routes import admin, agent, auth, chat, main
 
+    app.register_blueprint(main.bp)
     app.register_blueprint(auth.bp)
     app.register_blueprint(chat.bp)
     app.register_blueprint(agent.bp)

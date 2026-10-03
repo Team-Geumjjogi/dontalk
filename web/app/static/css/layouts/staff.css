@@ -1,0 +1,20 @@
+/* 상담사/관리자 업무 화면 레이아웃: 위에 흰 상단바, 아래 회색 업무 영역. 데스크톱 기준. */
+.app-body { background: var(--color-bg-app); }
+.staff-user { color: var(--color-text-muted); font-size: var(--text-sm); }
+.staff-user strong { color: var(--color-text); font-weight: var(--weight-semibold); }
+.staff-main { padding: var(--space-6); }
+.staff-main--full { padding: 0; }   /* 상담사 화면처럼 영역을 꽉 채우는 경우 */
+.staff-title { margin-bottom: var(--space-5); font-size: var(--text-xl); font-weight: var(--weight-bold); }
+
+/* 관리자 상단 메뉴 */
+.staff-nav { display: flex; gap: var(--space-1); margin-right: var(--space-2); }
+.staff-nav__link {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+.staff-nav__link:hover { background: var(--color-bg-app); }
+.staff-nav__link--active { background: var(--color-accent-soft); color: var(--color-text); }

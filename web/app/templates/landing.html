@@ -1,0 +1,38 @@
+{#- 첫 화면(서비스 소개). 고객은 "AI 상담 시작하기", 직원은 오른쪽 위 "상담사·관리자 로그인"으로 갈라진다. -#}
+{% extends "layouts/public.html" %}
+{% from "components/badge.html" import badge %}
+{% from "components/button.html" import button %}
+{% from "components/card.html" import card %}
+
+{% set features = [
+  ("은행·보험·증권 상담", "대출, 보험금 청구, 주식 거래까지 분야별 상담 사례를 바탕으로 안내해 드려요."),
+  ("근거 있는 답변", "실제 상담 사례를 찾아 근거가 있는 내용만 안내하고, 확실하지 않으면 추측하지 않아요."),
+  ("상담사 연결", "AI가 해결하기 어려운 문의나 계좌 처리가 필요한 요청은 상담사에게 바로 이어드려요."),
+] %}
+
+{% block title %}돈톡 DonTalk — AI 금융 상담{% endblock %}
+
+{% block page_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/landing.css') }}">
+{% endblock %}
+
+{% block header_actions %}
+  {{ button("상담사·관리자 로그인", href=url_for("auth.login"), variant="secondary", size="sm") }}
+{% endblock %}
+
+{% block content %}
+  <section class="hero container">
+    {{ badge("24시간 AI 금융 상담", tone="warning") }}
+    <h1 class="hero__title">돈 이야기가<br>더 이상 어렵지 않아요</h1>
+    <p class="hero__lead">돈에 대해 편하게 이야기하고, 금융 고민을 톡톡 풀어주는 AI 상담 서비스를 만나보세요.</p>
+    <div class="hero__actions">
+      {{ button("AI 상담 시작하기 →", href=url_for("chat.index"), size="lg") }}
+    </div>
+  </section>
+
+  <section class="features container" aria-label="서비스 특징">
+    {% for title, description in features %}
+      {% call card(title=title) %}{{ description }}{% endcall %}
+    {% endfor %}
+  </section>
+{% endblock %}

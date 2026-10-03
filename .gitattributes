@@ -1,3 +1,4 @@
 # 노트북 출력(그림/긴 로그)이 커밋되지 않게 하는 설정. 각자 `nbstripout --install` 을 한 번 실행해야 적용됩니다.
 *.ipynb filter=nbstripout
 *.ipynb diff=ipynb
+*.safetensors filter=lfs diff=lfs merge=lfs -text

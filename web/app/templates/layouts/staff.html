@@ -1,0 +1,32 @@
+{#- 상담사/관리자 화면의 레이아웃: 흰 상단바(로고 + 사용자 이름 + 로그아웃) + 업무 영역.
+    블록: title, page_css, main_class(staff-main--full 등), content. 사용자 정보는 current_user 에서 가져온다. -#}
+{% extends "layouts/base.html" %}
+{% from "components/site_header.html" import site_header %}
+{% from "components/button.html" import button %}
+{% from "components/flash_messages.html" import flash_messages %}
+
+{% block layout_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layouts/staff.css') }}">
+{% endblock %}
+
+{% block body_class %}app-body{% endblock %}
+
+{% block body %}
+  {% call site_header(bordered=True, fluid=True) %}
+    <span class="staff-user">
+      <strong>{{ current_user.name }}</strong>님
+      {%- if current_user.department %} · {{ current_user.department }} 담당{% endif %}
+    </span>
+    {% if current_user.role.value == "admin" %}
+      <nav class="staff-nav" aria-label="관리자 메뉴">
+        <a class="staff-nav__link{{ ' staff-nav__link--active' if request.endpoint == 'admin.dashboard' }}" href="{{ url_for('admin.dashboard') }}">대시보드</a>
+        <a class="staff-nav__link{{ ' staff-nav__link--active' if request.endpoint in ('admin.consults', 'admin.consult_detail') }}" href="{{ url_for('admin.consults') }}">상담 이력</a>
+      </nav>
+    {% endif %}
+    {{ button("로그아웃", href=url_for("auth.logout"), variant="ghost", size="sm") }}
+  {% endcall %}
+  {{ flash_messages(fluid=True) }}
+  <main class="staff-main {% block main_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+{% endblock %}
