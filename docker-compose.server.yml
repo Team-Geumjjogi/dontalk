@@ -29,7 +29,7 @@ services:
       --enable-lora
       --max-loras 3
       --max-lora-rank ${VLLM_MAX_LORA_RANK:-16}
-      --lora-modules bank=/adapters/bank insurance=/adapters/insurance securities=/adapters/securities
+      --lora-modules bank=/adapters/bank insurance=/adapters/insurance stock=/adapters/stock
 
     deploy:
       resources:
