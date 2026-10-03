@@ -39,7 +39,7 @@ def test_request_shape_and_adapter_selection(monkeypatch):
     assert body["temperature"] == 0.0
 
 
-@pytest.mark.parametrize("category, adapter", [("은행", "bank"), ("보험", "insurance"), ("증권", "securities")])
+@pytest.mark.parametrize("category, adapter", [("은행", "bank"), ("보험", "insurance"), ("증권", "stock")])
 def test_all_categories_map_to_adapters(category, adapter):
     seen = []
 

@@ -9,7 +9,7 @@ from app.llm.prompts import INSTRUCTION
 ADAPTER_NAMES = {
     "은행": "bank",
     "보험": "insurance",
-    "증권": "securities",
+    "증권": "stock",
 }
 
 
