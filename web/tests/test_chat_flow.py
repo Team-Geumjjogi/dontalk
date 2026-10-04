@@ -40,6 +40,17 @@ def test_chat_creates_consult_and_stores_sources(app, client, ai):
         assert consult.messages[1].sources[0]["follow_up_question"] == "추가 서류는?"
 
 
+def test_chat_response_exposes_only_answer_and_handoff_needed(app, client, ai):
+    ai.reply = {**ai.reply, "handoff_needed": True, "handoff_code": "no_basis", "handoff_reason": "최고 유사도 0.50 < 0.55"}
+    response = client.post("/api/chat", json={"message": "대출 연장"})
+    assert response.get_json() == {"answer": "답변", "handoff_needed": True}  # 분류/근거/이관 사유는 고객에게 내려가지 않는다
+    consult = only_consult(app)  # 내부 저장은 그대로
+    assert consult.category == "은행" and consult.handoff_reason == HandoffReason.no_basis
+    assert consult.handoff_detail == "최고 유사도 0.50 < 0.55"
+    with app.app_context():
+        assert db.session.scalars(db.select(Message).where(Message.sources.is_not(None))).one().sources == SOURCES
+
+
 @pytest.mark.parametrize("code,expected", [
     ("contact_request", HandoffReason.customer_request), ("action_request", HandoffReason.action_request),
     ("no_basis", HandoffReason.no_basis), ("low_confidence", HandoffReason.low_confidence), ("ai_error", HandoffReason.ai_error),

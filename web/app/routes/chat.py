@@ -120,7 +120,8 @@ def chat():
         consult.handoff_detail = result.get("handoff_reason")
 
     db.session.commit()
-    return jsonify(result)
+    # 분류/근거/이관 사유 같은 내부·상담사용 정보는 위에서 DB에만 저장하고, 고객 브라우저에는 화면에 필요한 값만 내려보낸다.
+    return jsonify({"answer": result.get("answer", ""), "handoff_needed": bool(result.get("handoff_needed"))})
 
 
 @bp.route("/api/end", methods=["POST"])
