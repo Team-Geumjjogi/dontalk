@@ -202,7 +202,7 @@ def warm_up() -> None:
 def _sources(docs: List[dict]) -> List[Source]:
     return [
         Source(
-            doc_id=str(d["qa_id"]),
+            doc_id=str(d["doc_id"]),
             category=d.get("consulting_category") or "",
             topic=d.get("consulting_topic") or "",
             score=round(d["similarity"], 4),
