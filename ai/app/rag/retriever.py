@@ -19,7 +19,8 @@
   DB_TABLE_QA(기본 financial_consulting_qa; 예전 DB_TABLE 도 계속 인식)
   DB_TABLE_CRAWLING(기본 financial_consulting_qa_crawling)
   DB_QUERY_TIMEOUT(기본 6초: 이 시간 안에 응답이 없으면 연결을 버리고 새로 연결해 한 번 더 시도)
-  RAG_TOP_K(기본 5)  RAG_TOP_K_QA / RAG_TOP_K_CRAWLING (테이블별로 따로 주고 싶을 때, 기본은 RAG_TOP_K)
+  RAG_TOP_K(기본 5): 최종적으로 LLM 에 넘길 문서 수. 테이블별 후보도 기본은 이 값(5+5건을 모아 유사도 상위 5건만 남긴다)
+  RAG_TOP_K_QA / RAG_TOP_K_CRAWLING (테이블별 후보 수를 따로 주고 싶을 때)
 
 원격 DB 연결은 Wi-Fi 변경/절전/서버 쪽 정리로 조용히 끊길 수 있다. 그러면 쿼리가 에러 없이 한참 멈추는데,
 (1) TCP keepalive, (2) 쿼리 타임아웃(워치독), (3) 연결을 버리고 재시도 로 멈춤 대신 에러가 나서 상담사 이관 안내로 넘어가게 한다.
@@ -246,9 +247,14 @@ def search_crawling(query: str, top_k: Optional[int] = None) -> List[dict]:
 def _postprocess(rows: List[dict]) -> List[dict]:
     """합쳐진 RAG 결과를 걸러서 튜닝 모델에 넘길 데이터만 고르는 자리.
 
-    지금은 similarity 내림차순 정렬만 한다. 추가 처리 로직(유사도 컷오프, 중복 제거, 개수 제한 등)은 여기에 넣는다.
+    similarity 내림차순으로 정렬해 상위 TOP_K(기본 5)건만 남긴다. 추가 처리 로직(유사도 컷오프, 중복 제거 등)은 여기에 넣는다.
+
+    10건(5+5)을 그대로 넘기면 유사도 0.45 안팎의 약한 문서가 프롬프트 끝에 붙어 답변이 그 문서를 따라가고,
+    프롬프트가 vLLM 컨텍스트 한도(4096토큰)를 넘겨 400 오류가 나기도 했다(10건 중 1/25건 실측).
+    chat_service 는 첫 문서의 유사도(최고 유사도)와 문서 수 기준 분야 비율(확신도)로 이관을 판단하므로,
+    여기서 자르면 그 판단도 5건 기준(테이블이 하나였을 때와 같은 기준)으로 유지된다.
     """
-    return sorted(rows, key=lambda r: r["similarity"], reverse=True)
+    return sorted(rows, key=lambda r: r["similarity"], reverse=True)[:TOP_K]
 
 
 def search(query: str) -> List[dict]:

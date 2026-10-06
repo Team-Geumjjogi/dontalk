@@ -85,6 +85,26 @@ def test_search_merges_both_tables_sorted_by_similarity(monkeypatch):
     assert [d["doc_id"] for d in docs] == ["crawling-7", "21-1_bk_01"]  # 유사도 0.9, 0.75 순
 
 
+def test_search_keeps_only_top_k_by_similarity_across_both_tables(monkeypatch):
+    monkeypatch.setattr(retriever, "_embed_query", lambda q: [0.0])
+    monkeypatch.setattr(retriever, "TOP_K", 5)
+
+    def five_each(spec, vec, top_k=None):
+        base = {"qa": 0.80, "crawling": 0.79}[spec.source]  # qa 0.80,0.78,.. / 크롤링 0.79,0.77,..
+        return [
+            {**retriever._to_doc(spec, {**(QA_ROW if spec.source == "qa" else CRAWLING_ROW), "distance": 1 - (base - 0.02 * i)}),
+             "doc_id": f"{spec.source}-{i}"}
+            for i in range(5)
+        ]
+
+    monkeypatch.setattr(retriever, "_search_table", five_each)
+    docs = retriever.search("질문")
+    assert len(docs) == 5  # 5+5 건 중 상위 5건만
+    sims = [d["similarity"] for d in docs]
+    assert sims == sorted(sims, reverse=True) and round(sims[0], 2) == 0.80
+    assert [d["doc_id"] for d in docs] == ["qa-0", "crawling-0", "qa-1", "crawling-1", "qa-2"]  # 두 테이블이 섞여 유사도순
+
+
 def test_search_skips_a_failing_table_but_raises_when_all_fail(monkeypatch):
     monkeypatch.setattr(retriever, "_embed_query", lambda q: [0.0])
 
