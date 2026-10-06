@@ -29,16 +29,79 @@ def test_search_blank_query_returns_empty():
     assert retriever.search("   ") == []
 
 
-def test_search_converts_distance_to_similarity(monkeypatch):
+QA_ROW = {
+    "qa_id": "21-1_bk_01", "question": "이체 방법?", "answer": "앱에서 가능", "full_source": "요구사항:a\n고객질문:b\n상담사답변:c\n꼬리질문:d\n종합답변:e",
+    "follow_up_question": "한도는?", "output": "종합 답변", "consulting_category": "은행", "consulting_topic": "이체", "distance": 0.25,
+}
+CRAWLING_ROW = {
+    "id": 7, "instruction": "통장 만들기가 뭔가요?", "question": "통장 만들기가 뭔가요?", "answer": "앱에서 개설합니다",
+    "consulting_category": "은행", "consulting_topic": "전자금융", "distance": 0.1,
+}
+
+
+def test_qa_row_keeps_db_values_in_common_format():
+    doc = retriever._to_doc(retriever.SPEC_QA, QA_ROW)
+    assert doc["doc_id"] == "21-1_bk_01" and doc["source"] == "qa"
+    assert doc["full_source"] == QA_ROW["full_source"]  # qa 는 DB 값을 그대로 쓴다 (5줄)
+    assert doc["follow_up_question"] == "한도는?" and doc["output"] == "종합 답변"
+    assert doc["similarity"] == 0.75 and "distance" not in doc
+
+
+def test_crawling_row_gets_prefixed_id_composed_full_source_and_empty_counselor_fields():
+    doc = retriever._to_doc(retriever.SPEC_CRAWLING, CRAWLING_ROW)
+    assert doc["doc_id"] == "crawling-7" and doc["source"] == "crawling"
+    assert doc["full_source"] == "요구사항:통장 만들기가 뭔가요?\n고객질문:통장 만들기가 뭔가요?\n상담사답변:앱에서 개설합니다"
+    assert doc["follow_up_question"] is None and doc["output"] is None
+    assert doc["similarity"] == 0.9
+
+
+def test_both_tables_return_the_same_keys():
+    qa, crawling = retriever._to_doc(retriever.SPEC_QA, QA_ROW), retriever._to_doc(retriever.SPEC_CRAWLING, CRAWLING_ROW)
+    assert set(qa) == set(crawling)
+
+
+def test_select_columns_exist_in_each_table_design():
+    # 크롤링 테이블에는 이 컬럼들이 없다. SELECT 에 넣으면 "column does not exist" 오류가 난다.
+    assert not {"qa_id", "full_source", "follow_up_question", "output"} & set(retriever.SPEC_CRAWLING.columns)
+    assert {"id", "instruction"} <= set(retriever.SPEC_CRAWLING.columns)
+
+
+def test_search_merges_both_tables_sorted_by_similarity(monkeypatch):
     class FakeModel:
         def encode(self, text, **kwargs):
             assert kwargs["prompt_name"] == "query"
             return [0.0]
 
+    rows_by_table = {retriever.SPEC_QA.table: [QA_ROW], retriever.SPEC_CRAWLING.table: [CRAWLING_ROW]}
+
+    def fake_query(statement, params):
+        # 어느 테이블을 조회하는 SQL 인지 문장에 들어 있는 테이블명으로 구분한다
+        text = statement.as_string(None)
+        return next(rows for table, rows in rows_by_table.items() if f'"{table}"' in text)
+
     monkeypatch.setattr(retriever, "_get_model", lambda: FakeModel())
-    monkeypatch.setattr(retriever, "_query", lambda statement, params: [{"qa_id": "a", "distance": 0.25}])
-    rows = retriever.search("질문")
-    assert rows[0]["similarity"] == 0.75 and "distance" not in rows[0]
+    monkeypatch.setattr(retriever, "_query", fake_query)
+    docs = retriever.search("질문")
+    assert [d["doc_id"] for d in docs] == ["crawling-7", "21-1_bk_01"]  # 유사도 0.9, 0.75 순
+
+
+def test_search_skips_a_failing_table_but_raises_when_all_fail(monkeypatch):
+    monkeypatch.setattr(retriever, "_embed_query", lambda q: [0.0])
+
+    def only_qa_works(spec, vec, top_k=None):
+        if spec is retriever.SPEC_CRAWLING:
+            raise RuntimeError("crawling down")
+        return [retriever._to_doc(spec, QA_ROW)]
+
+    monkeypatch.setattr(retriever, "_search_table", only_qa_works)
+    assert [d["doc_id"] for d in retriever.search("질문")] == ["21-1_bk_01"]
+
+    def all_down(spec, vec, top_k=None):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(retriever, "_search_table", all_down)
+    with pytest.raises(RuntimeError):
+        retriever.search("질문")
 
 
 # --- 공용 DB 연결이 조용히 끊겼을 때: 멈추지 말고 연결을 버리고 재시도 ---

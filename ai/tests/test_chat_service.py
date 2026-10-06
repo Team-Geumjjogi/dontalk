@@ -6,7 +6,7 @@ from app.services import chat_service as cs
 
 
 def _doc(sim, cat="은행", topic="대출문의", question="만기 연장?"):
-    return {"qa_id": "q1", "similarity": sim, "consulting_category": cat, "consulting_topic": topic,
+    return {"doc_id": "q1", "similarity": sim, "consulting_category": cat, "consulting_topic": topic,
             "question": question, "answer": "앱에서 가능", "output": "종합 ●●원", "full_source": "전체 ●●",
             "follow_up_question": "추가로 필요한 서류는?"}
 
