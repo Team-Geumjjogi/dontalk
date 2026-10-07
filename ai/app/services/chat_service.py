@@ -206,7 +206,7 @@ def _sources(docs: List[dict]) -> List[Source]:
             category=d.get("consulting_category") or "",
             topic=d.get("consulting_topic") or "",
             score=round(d["similarity"], 4),
-            snippet=(d.get("question") or d.get("full_source") or "")[:120],
+            snippet=(d.get("question") or "")[:120],
             follow_up_question=d.get("follow_up_question"),
             output=(d.get("output") or "")[:SOURCE_OUTPUT_MAX] or None,
         )

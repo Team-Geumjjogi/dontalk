@@ -5,11 +5,11 @@
 
 테이블마다 SQL 이 달라서 TableSpec 으로 테이블별 설정(테이블명/조회 컬럼/WHERE 조건/임베딩 컬럼)을 따로 둔다.
 질문 임베딩은 한 번만 만들어 두 테이블에 같이 쓴다.
-두 테이블은 컬럼이 달라서(크롤링에는 qa_id/full_source/follow_up_question/output 이 없다) 결과를 "공통 형식" 으로 맞춘다.
-  doc_id, question, answer, full_source, follow_up_question, output, consulting_category, consulting_topic, similarity, source
+두 테이블은 컬럼이 달라서(크롤링에는 qa_id/follow_up_question/output 이 없다) 결과를 "공통 형식" 으로 맞춘다.
+  doc_id, question, answer, follow_up_question, output, consulting_category, consulting_topic, similarity, source
   - doc_id : qa 는 qa_id 그대로, 크롤링은 "crawling-{id}" (id 가 1,2,3.. 숫자라 어느 테이블 문서인지 구분되게 접두어를 붙인다)
-  - full_source : LLM 프롬프트의 "RAG 결과" 가 되는 텍스트. qa 는 DB 값 그대로, 크롤링은 같은 형식으로 조립한다
-  - follow_up_question / output : 상담사 화면용. 크롤링에는 없으므로 None
+  - question / answer : LLM 프롬프트의 "RAG 결과" 로 쓰는 값 (질의 + 답변). 두 테이블 모두 있다
+  - follow_up_question / output : 상담사 화면(예상 꼬리질문/종합답변)용이라 LLM 에는 주지 않는다. 크롤링에는 없으므로 None
 맞춘 결과는 similarity 내림차순의 한 리스트로 반환한다. (기존 search() 와 같은 List[dict] 형태)
 
 적재(임베딩 → DB)는 load_to_postgres.py / embedder.py 담당이고, 이 파일은 조회만 합니다.
@@ -49,7 +49,7 @@ QUERY_TIMEOUT = float(os.getenv("DB_QUERY_TIMEOUT", "6"))
 _EMBEDDING_MODEL = config.EMBEDDING_MODEL or "dragonkue/snowflake-arctic-embed-l-v2.0-ko"
 
 # DB 컬럼 값을 그대로 복사하는 공통 키. 이 컬럼이 없는 테이블(크롤링)에서는 None 이 된다.
-# (doc_id, full_source 는 테이블마다 만드는 방법이 달라서 _to_doc 에서 따로 채운다)
+# (doc_id 는 테이블마다 만드는 방법이 달라서 _to_doc 에서 따로 채운다)
 COPY_KEYS: Tuple[str, ...] = (
     "question", "answer", "follow_up_question", "output", "consulting_category", "consulting_topic",
 )
@@ -63,7 +63,6 @@ class TableSpec:
     top_k: int                  # 이 테이블에서 가져올 개수
     id_column: str              # 문서 식별자로 쓸 컬럼 (qa: qa_id / crawling: id)
     id_prefix: str = ""         # doc_id 앞에 붙일 접두어 (크롤링의 id 는 숫자라서 "crawling-")
-    has_full_source: bool = True           # False 면 테이블에 full_source 컬럼이 없다 → _compose_full_source 로 조립 (instruction 컬럼 필요)
     embedding_column: str = "embedding_q"  # 고객 질문만 임베딩한 컬럼
     filter_column: Optional[str] = None    # WHERE {filter_column} = {filter_value}. None 이면 WHERE 없음
     filter_value: Optional[str] = None
@@ -73,7 +72,7 @@ SPEC_QA = TableSpec(
     source="qa",
     table=os.getenv("DB_TABLE_QA") or os.getenv("DB_TABLE", "financial_consulting_qa"),
     columns=(
-        "qa_id", "question", "answer", "full_source", "follow_up_question", "output",
+        "qa_id", "question", "answer", "follow_up_question", "output",
         "consulting_category", "consulting_topic",
     ),
     top_k=int(os.getenv("RAG_TOP_K_QA", TOP_K)),
@@ -84,11 +83,10 @@ SPEC_QA = TableSpec(
 SPEC_CRAWLING = TableSpec(
     source="crawling",
     table=os.getenv("DB_TABLE_CRAWLING", "financial_consulting_qa_crawling"),
-    columns=("id", "instruction", "question", "answer", "consulting_category", "consulting_topic"),
+    columns=("id", "question", "answer", "consulting_category", "consulting_topic"),
     top_k=int(os.getenv("RAG_TOP_K_CRAWLING", TOP_K)),
     id_column="id",
     id_prefix="crawling-",
-    has_full_source=False,
 )
 SPECS: Tuple[TableSpec, ...] = (SPEC_QA, SPEC_CRAWLING)
 
@@ -200,24 +198,10 @@ def _build_statement(spec: TableSpec, vec, limit: int):
     return statement, (vec, spec.filter_value, vec, limit)
 
 
-def _compose_full_source(row: dict) -> str:
-    """full_source 컬럼이 없는 테이블(크롤링)용. qa 테이블 full_source 의 앞 3줄과 같은 "라벨:값" 형식으로 만든다.
-
-    qa 의 full_source 는 요구사항/고객질문/상담사답변/꼬리질문/종합답변 5줄인데, 크롤링에는 뒤의 2개가 없어서 3줄만 만든다.
-    (크롤링은 instruction 에 question 과 같은 값이 들어 있다. data_preprocessing_crawling.py 참고)
-    """
-    return "\n".join((
-        f"요구사항:{row.get('instruction')}",
-        f"고객질문:{row.get('question')}",
-        f"상담사답변:{row.get('answer')}",
-    ))
-
-
 def _to_doc(spec: TableSpec, row: dict) -> dict:
     """DB row 1건 → 공통 형식 dict. (Java 로 치면 테이블별 엔티티를 공통 DTO 로 바꾸는 row mapper)"""
     doc = {key: row.get(key) for key in COPY_KEYS}
     doc["doc_id"] = f"{spec.id_prefix}{row[spec.id_column]}"
-    doc["full_source"] = row.get("full_source") if spec.has_full_source else _compose_full_source(row)
     doc["similarity"] = 1.0 - float(row["distance"])
     doc["source"] = spec.source
     return doc
@@ -260,7 +244,7 @@ def _postprocess(rows: List[dict]) -> List[dict]:
 def search(query: str) -> List[dict]:
     """질문과 가장 비슷한 문서를 두 테이블에서 각각 Top-K 조회해 하나의 리스트로 반환한다.
 
-    각 row(공통 형식): doc_id, question, answer, full_source, follow_up_question, output,
+    각 row(공통 형식): doc_id, question, answer, follow_up_question, output,
     consulting_category, consulting_topic, similarity, source("qa"/"crawling").
 
     - 질문 임베딩은 한 번만 만든다.

@@ -13,18 +13,29 @@ ADAPTER_NAMES = {
 }
 
 
+def _format_doc(doc: dict) -> str:
+    """One reference document as "고객질문:...\n상담사답변:..." (a missing field is skipped)."""
+    lines = []
+    if doc.get("question"):
+        lines.append(f"고객질문:{doc['question']}")
+    if doc.get("answer"):
+        lines.append(f"상담사답변:{doc['answer']}")
+    return "\n".join(lines)
+
+
 def build_question(message: str, docs: Optional[List[dict]] = None, history: Optional[List[dict]] = None) -> str:
     """Build the single user message the adapters were trained on.
 
     Args:
         message: Current customer question.
-        docs: Retrieved documents (dicts with a "full_source" text); order is kept.
+        docs: Retrieved documents (dicts with "question" and "answer"); order is kept. Only these two fields reach the LLM;
+            counselor-only fields (follow_up_question, output) are for the counselor screen, not for the prompt.
         history: Earlier turns as [{"role": "user"|"assistant", "content": "..."}], oldest first.
 
     Returns:
         "[이전 대화 ...] 고객 질문 : ... RAG 결과: ..." text for generate_answer.
     """
-    rag = "\n\n".join(doc.get("full_source") or "" for doc in docs or [])
+    rag = "\n\n".join(text for text in map(_format_doc, docs or []) if text)
     past = "".join(f"{'고객' if turn['role'] == 'user' else '상담사'}: {turn['content']}\n" for turn in history or [])
     prefix = f"이전 대화:\n{past}\n" if past else ""
     return f"{prefix}고객 질문 : {message}\nRAG 결과: {rag}"

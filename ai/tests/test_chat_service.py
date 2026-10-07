@@ -7,7 +7,7 @@ from app.services import chat_service as cs
 
 def _doc(sim, cat="은행", topic="대출문의", question="만기 연장?"):
     return {"doc_id": "q1", "similarity": sim, "consulting_category": cat, "consulting_topic": topic,
-            "question": question, "answer": "앱에서 가능", "output": "종합 ●●원", "full_source": "전체 ●●",
+            "question": question, "answer": "앱에서 가능", "output": "종합 ●●원",
             "follow_up_question": "추가로 필요한 서류는?"}
 
 
@@ -279,7 +279,7 @@ def test_generate_sends_masked_docs_to_vllm(monkeypatch):
 
     monkeypatch.setattr(cs.vllm_client, "generate_answer", fake_generate_answer)
 
-    assert cs._generate("질문", "은행", [{"full_source": "계좌 ●●●● 입니다"}], []) == "답변"
+    assert cs._generate("질문", "은행", [{"question": "내 ●●●● 계좌?", "answer": "계좌 ●●●● 입니다"}], []) == "답변"
     assert sent["category"] == "은행"
     assert "●" not in sent["question"] and "[비공개]" in sent["question"]
 
