@@ -23,22 +23,22 @@ def _format_doc(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def build_question(message: str, docs: Optional[List[dict]] = None, history: Optional[List[dict]] = None) -> str:
+def build_question(message: str, docs: Optional[List[dict]] = None) -> str:
     """Build the single user message the adapters were trained on.
 
     Args:
         message: Current customer question.
         docs: Retrieved documents (dicts with "question" and "answer"); order is kept. Only these two fields reach the LLM;
             counselor-only fields (follow_up_question, output) are for the counselor screen, not for the prompt.
-        history: Earlier turns as [{"role": "user"|"assistant", "content": "..."}], oldest first.
+
+    Earlier turns of the conversation are deliberately not part of the prompt: each answer is judged on the current question
+    and its reference documents alone (the adapters were not trained with conversation history).
 
     Returns:
-        "[이전 대화 ...] 고객 질문 : ... RAG 결과: ..." text for generate_answer.
+        "고객 질문 : ... RAG 결과: ..." text for generate_answer.
     """
     rag = "\n\n".join(text for text in map(_format_doc, docs or []) if text)
-    past = "".join(f"{'고객' if turn['role'] == 'user' else '상담사'}: {turn['content']}\n" for turn in history or [])
-    prefix = f"이전 대화:\n{past}\n" if past else ""
-    return f"{prefix}고객 질문 : {message}\nRAG 결과: {rag}"
+    return f"고객 질문 : {message}\nRAG 결과: {rag}"
 
 
 def generate_answer(

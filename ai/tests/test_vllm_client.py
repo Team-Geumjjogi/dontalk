@@ -63,16 +63,18 @@ def test_invalid_input_is_rejected_before_request(category, question, max_tokens
         vllm_client.generate_answer(category, question, max_tokens, client=make_client(handler))
 
 
-def test_build_question_matches_transformers_format():
+def test_build_question_format():
     docs = [{"question": "질문1", "answer": "답변1"}, {"question": "질문2", "answer": "답변2"}, {}]  # 빈 문서는 건너뛴다
-    history = [{"role": "user", "content": "대출 연장"}, {"role": "assistant", "content": "안내드립니다"}]
 
-    question = vllm_client.build_question("수수료는요?", docs, history)
+    question = vllm_client.build_question("수수료는요?", docs)
 
-    assert question == (
-        "이전 대화:\n고객: 대출 연장\n상담사: 안내드립니다\n\n"
-        "고객 질문 : 수수료는요?\nRAG 결과: 고객질문:질문1\n상담사답변:답변1\n\n고객질문:질문2\n상담사답변:답변2"
-    )
+    assert question == "고객 질문 : 수수료는요?\nRAG 결과: 고객질문:질문1\n상담사답변:답변1\n\n고객질문:질문2\n상담사답변:답변2"
+
+
+def test_build_question_has_no_conversation_history_parameter():
+    import inspect
+
+    assert "history" not in inspect.signature(vllm_client.build_question).parameters  # 이전 대화는 프롬프트에 넣지 않는다
 
 
 def test_build_question_gives_llm_only_question_and_answer():
