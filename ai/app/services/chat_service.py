@@ -13,6 +13,7 @@
 
 .env (모두 선택, 없으면 기본값)
   
+  RAG_LLM_DOCS         기본 1 (LLM 프롬프트에 넣는 참고 문서 수. 검색·분야 판단·상담사 화면은 RAG_TOP_K 건 전체 사용)
   RAG_MIN_SIMILARITY   기본 0.55  (업무 질문 15개 최소 0.63 / 업무 밖·경계 질문 최대 0.51 로 정한 초기값)
   RAG_MIN_CONFIDENCE   기본 0.6
   RAG_OUT_OF_SCOPE_BELOW 기본 0.45 (25개 질문 조사: 업무 밖 질문 최대 0.43, 업무 질문 최소 0.63)
@@ -22,7 +23,7 @@ import logging
 import os
 import re
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 from app.core import config
@@ -34,12 +35,16 @@ from app.llm import vllm_client
 log = logging.getLogger("app.chat")
 
 
+# LLM 에 넣는 참고 문서 수. 튜닝 모델이 RAG 없이(질의+답변만) 학습돼서 여러 문서 중 맞는 걸 고르지 못하고 프롬프트 맨 뒤 문서를 따라간다.
+# 실측(크롤링 FAQ 24개, FAQ 질문 그대로): 5건 → 정답 문서를 따라간 답변 0/24, 1위만 → 20/24. 일반 질문 25개도 1위만 줄 때 적절한 답이 4개에서 12개로 늘었다.
+# 그래서 지금은 1위만 준다. RAG 를 포함해 다시 학습한 모델로 바꾸면 이 값을 올린다.
+LLM_DOC_COUNT = max(1, int(os.getenv("RAG_LLM_DOCS", "1")))
 MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.55"))
 MIN_CONFIDENCE = float(os.getenv("RAG_MIN_CONFIDENCE", "0.6"))
 OUT_OF_SCOPE_BELOW = float(os.getenv("RAG_OUT_OF_SCOPE_BELOW", "0.45"))
 ANSWER_MAX_CHARS = int(os.getenv("ANSWER_MAX_CHARS", "500"))
 
-MAX_HISTORY_TURNS = 6      # LLM 에 넘기는 이전 대화 개수
+MAX_HISTORY_TURNS = 6      # 후속 질문 검색 보강에 쓰는 이전 대화 개수 (프롬프트에는 이전 대화 블록 없이, 보강된 질문만 들어간다)
 MAX_TURN_CHARS = 500       # 이전 발화 1건당 최대 글자 수
 SOURCE_OUTPUT_MAX = 800    # 상담사 화면용 근거 문서의 종합 답변 최대 글자 수
 FOLLOW_UP_MAX_CHARS = 15   # 이 길이 이하면 후속 질문으로 보고 직전 질문을 붙여서 검색
@@ -150,21 +155,24 @@ def _recent_history(req: ChatRequest) -> List[dict]:
     return turns[-MAX_HISTORY_TURNS:]
 
 
-def find_docs(message: str, history: List[dict]) -> List[dict]:
-    """질문에 맞는 근거 문서를 찾는다. 짧은 후속 질문은 직전 질문을 붙여서 검색하되, 직전 질문과 무관한 질문까지 붙지 않게 한다.
+def find_docs(message: str, history: List[dict]) -> Tuple[List[dict], str]:
+    """질문에 맞는 근거 문서를 찾는다. (문서, 실제로 검색에 쓴 질문)을 돌려준다. 짧은 후속 질문은 직전 질문을 붙여서 검색하되, 직전 질문과 무관한 질문까지 붙지 않게 한다.
 
     "오늘 서울 날씨 어때요?"처럼 짧아도 후속 질문이 아닌 경우가 있는데, 직전 질문을 붙이면 유사도가 0.7 이상으로 올라가서
     업무 밖 질문을 가려낼 수 없다. 그래서 참조어("그럼/그건…")가 없는 짧은 질문은 먼저 단독으로 검색하고,
     단독 유사도가 업무 밖 수준(< OUT_OF_SCOPE_BELOW)이면 합치지 않는다. (단독 유사도 실측: 진짜 후속 질문 0.46~0.83 / 업무 밖 질문 0.29~0.44)
+
+    돌려주는 질문은 LLM 프롬프트의 "고객 질문"으로도 쓴다. 이전 대화 블록은 프롬프트에 넣지 않으므로, 후속 질문("그럼 수수료는요?")의
+    지시어가 가리키는 대상은 이 보강된 질문으로만 모델에 전달된다. 합치지 않은 경우에는 고객이 쓴 원문 그대로다.
     """
     query = build_search_query(message, history)
     if query == message:
-        return _search(message)
+        return _search(message), message
     if not _FOLLOW_UP_START.match(message):
         alone = _search(message)
         if not alone or alone[0]["similarity"] < OUT_OF_SCOPE_BELOW:
-            return alone
-    return _search(query)
+            return alone, message
+    return _search(query), query
 
 
 def build_search_query(message: str, history: List[dict]) -> str:
@@ -182,9 +190,9 @@ def _search(query: str) -> List[dict]:
     return retriever.search(query)
 
 
-def _generate(message: str, category: Optional[str], docs: List[dict], history: List[dict]) -> str:
-    clean = [_mask_doc(d) for d in docs]
-    question = vllm_client.build_question(message, clean, history)
+def _generate(message: str, category: Optional[str], docs: List[dict]) -> str:
+    clean = [_mask_doc(d) for d in docs[:LLM_DOC_COUNT]]  # docs 는 유사도 내림차순이라 앞쪽이 가장 관련 높은 문서
+    question = vllm_client.build_question(message, clean)
     return vllm_client.generate_answer(category, question)
 
 
@@ -206,7 +214,7 @@ def _sources(docs: List[dict]) -> List[Source]:
             category=d.get("consulting_category") or "",
             topic=d.get("consulting_topic") or "",
             score=round(d["similarity"], 4),
-            snippet=(d.get("question") or d.get("full_source") or "")[:120],
+            snippet=(d.get("question") or "")[:120],
             follow_up_question=d.get("follow_up_question"),
             output=(d.get("output") or "")[:SOURCE_OUTPUT_MAX] or None,
         )
@@ -248,10 +256,11 @@ def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
 
     history = _recent_history(req)
     docs: List[dict] = []
+    query = message  # LLM 프롬프트의 "고객 질문". 후속 질문이면 find_docs 가 직전 질문을 붙인 문장으로 바꿔 준다
     search_error: Optional[Exception] = None
     step = time.perf_counter()
     try:
-        docs = find_docs(message, history)
+        docs, query = find_docs(message, history)
     except Exception as e:  # DB 연결/임베딩 오류 등. 서비스는 계속하고 이관으로 처리
         log.exception("RAG 검색 실패")
         search_error = e
@@ -264,6 +273,9 @@ def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
     if not grounded:  # 근거가 약하면 분야 판단도 믿을 수 없다
         category, topic, confidence = None, None, 0.0
     sources = _sources(docs) if grounded else []
+    if grounded and category and docs[0].get("consulting_category") != category:
+        # LLM 에는 1위 문서만 주는데 어댑터는 5건 다수결로 고른다. 둘이 어긋난 경우를 모아 두었다가 나중에 어댑터 선택 방식을 정할 때 쓴다.
+        log.info("분야 불일치 | LLM 에 넘기는 1위 문서 분야=%s(유사도 %.2f) / 다수결·어댑터=%s", docs[0].get("consulting_category"), docs[0]["similarity"], category)
 
     def handoff(text: str, code: str, reason: str) -> ChatResponse:
         return ChatResponse(
@@ -286,7 +298,7 @@ def _answer(req: ChatRequest, timings: dict) -> ChatResponse:
 
     step = time.perf_counter()
     try:
-        text = limit_answer(clean_answer(_generate(message, category, docs, history)))
+        text = limit_answer(clean_answer(_generate(query, category, docs)))
     except Exception as e:
         log.exception("LLM 답변 생성 실패")
         return handoff(MSG_ERROR, "ai_error", _error_reason("LLM 오류", e))

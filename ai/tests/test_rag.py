@@ -30,11 +30,11 @@ def test_search_blank_query_returns_empty():
 
 
 QA_ROW = {
-    "qa_id": "21-1_bk_01", "question": "이체 방법?", "answer": "앱에서 가능", "full_source": "요구사항:a\n고객질문:b\n상담사답변:c\n꼬리질문:d\n종합답변:e",
+    "qa_id": "21-1_bk_01", "question": "이체 방법?", "answer": "앱에서 가능",
     "follow_up_question": "한도는?", "output": "종합 답변", "consulting_category": "은행", "consulting_topic": "이체", "distance": 0.25,
 }
 CRAWLING_ROW = {
-    "id": 7, "instruction": "통장 만들기가 뭔가요?", "question": "통장 만들기가 뭔가요?", "answer": "앱에서 개설합니다",
+    "id": 7, "question": "통장 만들기가 뭔가요?", "answer": "앱에서 개설합니다",
     "consulting_category": "은행", "consulting_topic": "전자금융", "distance": 0.1,
 }
 
@@ -42,15 +42,15 @@ CRAWLING_ROW = {
 def test_qa_row_keeps_db_values_in_common_format():
     doc = retriever._to_doc(retriever.SPEC_QA, QA_ROW)
     assert doc["doc_id"] == "21-1_bk_01" and doc["source"] == "qa"
-    assert doc["full_source"] == QA_ROW["full_source"]  # qa 는 DB 값을 그대로 쓴다 (5줄)
+    assert doc["question"] == "이체 방법?" and doc["answer"] == "앱에서 가능"  # LLM 에 줄 질의 + 답변
     assert doc["follow_up_question"] == "한도는?" and doc["output"] == "종합 답변"
     assert doc["similarity"] == 0.75 and "distance" not in doc
 
 
-def test_crawling_row_gets_prefixed_id_composed_full_source_and_empty_counselor_fields():
+def test_crawling_row_gets_prefixed_id_and_empty_counselor_fields():
     doc = retriever._to_doc(retriever.SPEC_CRAWLING, CRAWLING_ROW)
     assert doc["doc_id"] == "crawling-7" and doc["source"] == "crawling"
-    assert doc["full_source"] == "요구사항:통장 만들기가 뭔가요?\n고객질문:통장 만들기가 뭔가요?\n상담사답변:앱에서 개설합니다"
+    assert doc["question"] == "통장 만들기가 뭔가요?" and doc["answer"] == "앱에서 개설합니다"
     assert doc["follow_up_question"] is None and doc["output"] is None
     assert doc["similarity"] == 0.9
 
@@ -62,8 +62,10 @@ def test_both_tables_return_the_same_keys():
 
 def test_select_columns_exist_in_each_table_design():
     # 크롤링 테이블에는 이 컬럼들이 없다. SELECT 에 넣으면 "column does not exist" 오류가 난다.
-    assert not {"qa_id", "full_source", "follow_up_question", "output"} & set(retriever.SPEC_CRAWLING.columns)
-    assert {"id", "instruction"} <= set(retriever.SPEC_CRAWLING.columns)
+    assert not {"qa_id", "follow_up_question", "output"} & set(retriever.SPEC_CRAWLING.columns)
+    assert {"id", "question", "answer"} <= set(retriever.SPEC_CRAWLING.columns)
+    # LLM 에는 질의 + 답변만 주므로 full_source(5줄 통째)는 어느 테이블에서도 가져오지 않는다
+    assert "full_source" not in retriever.SPEC_QA.columns + retriever.SPEC_CRAWLING.columns
 
 
 def test_search_merges_both_tables_sorted_by_similarity(monkeypatch):
