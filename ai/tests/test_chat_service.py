@@ -147,12 +147,19 @@ def test_search_query_for_new_topic_or_no_history():
     assert cs.build_search_query("수수료는요?", []) == "수수료는요?"
 
 
-def test_follow_up_uses_history_for_search_only(real_mode, monkeypatch):
+def test_follow_up_search_query_is_also_the_llm_question(real_mode, monkeypatch):
     queries = []
     monkeypatch.setattr(cs, "_search", lambda q: queries.append(q) or [_doc(0.8)] * 5)
     ask("그럼 수수료는요?", history=HIST)
-    assert queries == ["대출 만기 연장하고 싶어요 그럼 수수료는요?"]  # 이전 대화는 검색을 보강하는 데만 쓰고
-    assert len(real_mode[0]) == 3                                    # LLM 호출에는 (질문, 분야, 문서)만 넘어간다
+    assert queries == ["대출 만기 연장하고 싶어요 그럼 수수료는요?"]
+    assert len(real_mode[0]) == 3 and real_mode[0][0] == queries[0]   # LLM 호출에는 (보강된 질문, 분야, 문서)만 넘어간다
+
+
+def test_new_topic_question_reaches_llm_unchanged(real_mode, monkeypatch):
+    monkeypatch.setattr(cs, "_search", lambda q: [_doc(0.8)] * 5)
+    question = "해외 주식 계좌는 어떻게 개설하면 되는지 자세히 알려 주세요"  # 15자 초과 + 참조어 없음 = 후속 질문이 아님
+    ask(question, history=HIST)
+    assert real_mode[0][0] == question
 
 
 def test_history_is_trimmed():
@@ -237,26 +244,29 @@ PREV = [{"role": "user", "content": "대출 만기 연장하고 싶어요"}, {"r
 
 def test_find_docs_without_history_searches_once(monkeypatch):
     queries = _record_searches(monkeypatch, lambda q: 0.8)
-    cs.find_docs("수수료는요?", [])
-    assert queries == ["수수료는요?"]
+    _, query = cs.find_docs("수수료는요?", [])
+    assert queries == ["수수료는요?"] and query == "수수료는요?"
 
 
 def test_find_docs_with_referent_always_glues_without_extra_search(monkeypatch):
     queries = _record_searches(monkeypatch, lambda q: 0.3 if q == "그럼 수수료는요?" else 0.85)
-    docs = cs.find_docs("그럼 수수료는요?", PREV)
+    docs, query = cs.find_docs("그럼 수수료는요?", PREV)
     assert queries == ["대출 만기 연장하고 싶어요 그럼 수수료는요?"] and docs[0]["similarity"] == 0.85
+    assert query == queries[-1]  # 실제로 검색에 쓴 문장을 돌려준다
 
 
 def test_find_docs_short_real_follow_up_is_glued_when_standalone_is_financial(monkeypatch):
     queries = _record_searches(monkeypatch, lambda q: 0.65 if q == "수수료는요?" else 0.85)
-    docs = cs.find_docs("수수료는요?", PREV)
+    docs, query = cs.find_docs("수수료는요?", PREV)
     assert queries == ["수수료는요?", "대출 만기 연장하고 싶어요 수수료는요?"] and docs[0]["similarity"] == 0.85
+    assert query == "대출 만기 연장하고 싶어요 수수료는요?"
 
 
 def test_find_docs_short_off_topic_message_is_not_glued(monkeypatch):
     queries = _record_searches(monkeypatch, lambda q: 0.41 if q == "오늘 날씨 어때요?" else 0.80)
-    docs = cs.find_docs("오늘 날씨 어때요?", PREV)
+    docs, query = cs.find_docs("오늘 날씨 어때요?", PREV)
     assert queries == ["오늘 날씨 어때요?"] and docs[0]["similarity"] == 0.41     # 단독 결과가 그대로 쓰여 업무 밖으로 판정된다
+    assert query == "오늘 날씨 어때요?"                                         # 합치지 않았으면 원문 그대로
 
 
 def test_off_topic_after_finance_question_gets_guidance(monkeypatch):
@@ -351,7 +361,7 @@ def test_app_startup_runs_warm_up_unless_mock(monkeypatch):
     assert calls == ["warm"]
 
 
-def test_history_does_not_reach_vllm_question(monkeypatch):
+def _vllm_capture(monkeypatch):
     sent = {}
 
     def fake_generate_answer(category, question, **kwargs):
@@ -361,14 +371,38 @@ def test_history_does_not_reach_vllm_question(monkeypatch):
     monkeypatch.setattr(config, "AI_MOCK_MODE", False)
     monkeypatch.setattr(cs, "_search", lambda m: [_doc(0.8)] * 5)
     monkeypatch.setattr(cs.vllm_client, "generate_answer", fake_generate_answer)
+    return sent
 
+
+def test_history_block_does_not_reach_vllm_question(monkeypatch):
+    sent = _vllm_capture(monkeypatch)
     r = ask("그럼 수수료는요?", history=HIST)
-
-    assert not r.handoff_needed and r.answer == "수수료는 없습니다."
+    assert not r.handoff_needed and r.answer == "수수료는 없습니다." and sent["category"] == "은행"
     question = sent["question"]
-    assert question.startswith("고객 질문 : 그럼 수수료는요?\nRAG 결과: ")    # 이전 대화 블록 없이 현재 질문 + 참고 문서만
-    assert "이전 대화" not in question and "대출 만기 연장하고 싶어요" not in question and "앱에서 가능합니다." not in question
-    assert sent["category"] == "은행"
+    assert "이전 대화" not in question and "고객: " not in question and "상담사: " not in question  # 이전 대화 블록 없음
+    assert "앱에서 가능합니다." not in question                                                      # 이전 AI 답변도 없음
+
+
+def test_follow_up_prompt_carries_the_resolved_question(monkeypatch):
+    sent = _vllm_capture(monkeypatch)
+    ask("그럼 수수료는요?", history=HIST)
+    # 지시어("그럼")가 가리키는 대상은 보강된 질문으로 전달된다
+    assert sent["question"].startswith("고객 질문 : 대출 만기 연장하고 싶어요 그럼 수수료는요?\nRAG 결과: ")
+
+
+def test_category_mismatch_between_top_doc_and_majority_is_logged(real_mode, monkeypatch, caplog):
+    docs = [{**_doc(0.9, cat="보험"), "doc_id": "top"}] + [_doc(0.8)] * 4     # 1위만 보험, 나머지 4건은 은행(다수결=은행)
+    monkeypatch.setattr(cs, "_search", lambda q: docs)
+    with caplog.at_level("INFO", logger="app.chat"):
+        ask()
+    assert "분야 불일치" in caplog.text and "보험" in caplog.text and "은행" in caplog.text
+
+
+def test_no_mismatch_log_when_top_doc_matches_majority(real_mode, monkeypatch, caplog):
+    monkeypatch.setattr(cs, "_search", lambda q: [_doc(0.8)] * 5)
+    with caplog.at_level("INFO", logger="app.chat"):
+        ask()
+    assert "분야 불일치" not in caplog.text
 
 
 def test_llm_error_reason_has_message_but_answer_does_not(monkeypatch):

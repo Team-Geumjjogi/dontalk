@@ -27,7 +27,7 @@ def build_question(message: str, docs: Optional[List[dict]] = None) -> str:
     """Build the single user message the adapters were trained on.
 
     Args:
-        message: Current customer question.
+        message: Current customer question (for a follow-up, the question already completed with the previous one).
         docs: Retrieved documents (dicts with "question" and "answer"); order is kept. Only these two fields reach the LLM;
             counselor-only fields (follow_up_question, output) are for the counselor screen, not for the prompt.
 
